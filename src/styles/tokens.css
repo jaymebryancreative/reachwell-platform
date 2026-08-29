@@ -1,0 +1,22 @@
+:root {
+  --rw-ink: #11131a;
+  --rw-panel: #181b25;
+  --rw-surface: #f7f8fc;
+  --rw-card: #ffffff;
+  --rw-text: #161824;
+  --rw-muted: #687086;
+  --rw-border: #e6e8f0;
+  --rw-brand-a: #7357ff;
+  --rw-brand-b: #2c8cff;
+  --rw-brand-c: #65d9c4;
+  --rw-gradient: linear-gradient(135deg, var(--rw-brand-a), var(--rw-brand-b), var(--rw-brand-c));
+  --rw-radius-lg: 24px;
+  --rw-radius-md: 16px;
+  --rw-shadow: 0 18px 50px rgba(17, 19, 26, .10);
+}
+
+* { box-sizing: border-box; }
+html { color-scheme: light; }
+body { margin: 0; min-width: 320px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: var(--rw-surface); color: var(--rw-text); }
+button, input, textarea, select { font: inherit; }
+button { min-height: 44px; }
