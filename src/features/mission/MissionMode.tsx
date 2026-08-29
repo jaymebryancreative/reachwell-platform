@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 type Assignment = { id: string; label: string; completed?: boolean }
+type Action = 'note' | 'need' | 'prayer' | 'complete' | null
 
 const demoAssignments: Assignment[] = [
   { id: 'oak-101', label: '101 Oak Street' },
@@ -8,22 +9,43 @@ const demoAssignments: Assignment[] = [
   { id: 'oak-105', label: '105 Oak Street' }
 ]
 
-type Action = 'note' | 'need' | 'prayer' | 'complete' | null
-
 export function MissionMode() {
-  const [assignments, setAssignments] = useState(demoAssignments)
-  const [currentId, setCurrentId] = useState(assignments[0].id)
+  const [assignments, setAssignments] = useState<Assignment[]>(demoAssignments)
+  const [currentId, setCurrentId] = useState<string>(demoAssignments[0].id)
   const [activeAction, setActiveAction] = useState<Action>('note')
   const [note, setNote] = useState('')
 
-  const currentIndex = assignments.findIndex(a => a.id === currentId)
-  const current = assignments[currentIndex]
+  const currentIndex = assignments.findIndex((assignment) => assignment.id === currentId)
+  const current = assignments[currentIndex] ?? assignments[0]
+  const nextOpenAssignment = useMemo(
+    () => assignments.find((assignment) => !assignment.completed && assignment.id !== current.id),
+    [assignments, current.id]
+  )
+
+  function selectAssignment(id: string) {
+    setCurrentId(id)
+    setActiveAction(null)
+  }
+
+  function selectAction(action: Exclude<Action, null>) {
+    if (action === 'complete') {
+      completeCurrent()
+      return
+    }
+    setActiveAction((active) => (active === action ? null : action))
+  }
 
   function completeCurrent() {
-    setAssignments(items => items.map(a => a.id === currentId ? { ...a, completed: true } : a))
+    setAssignments((items) =>
+      items.map((assignment) =>
+        assignment.id === current.id ? { ...assignment, completed: true } : assignment
+      )
+    )
     setActiveAction('complete')
-    const next = assignments.slice(currentIndex + 1).find(a => !a.completed)
-    if (next) setCurrentId(next.id)
+
+    if (nextOpenAssignment) {
+      setCurrentId(nextOpenAssignment.id)
+    }
   }
 
   return (
@@ -37,26 +59,44 @@ export function MissionMode() {
         <p className="eyebrow">CURRENT HOME / ASSIGNMENT</p>
         <h1>{current.label}{current.completed ? ' ✓' : ''}</h1>
         <div className="assignment-list" aria-label="Assignments">
-          {assignments.map(a => (
-            <button key={a.id} className={a.id === currentId ? 'assignment selected' : 'assignment'} onClick={() => { setCurrentId(a.id); setActiveAction(null) }}>
-              {a.label}{a.completed ? ' ✓' : ''}
+          {assignments.map((assignment) => (
+            <button
+              key={assignment.id}
+              type="button"
+              className={assignment.id === currentId ? 'assignment selected' : 'assignment'}
+              onClick={() => selectAssignment(assignment.id)}
+            >
+              {assignment.label}{assignment.completed ? ' ✓' : ''}
             </button>
           ))}
         </div>
       </section>
 
       <section className="mission-card">
-        <div className="action-row">
-          {(['note','need','prayer','complete'] as Action[]).filter(Boolean).map(action => (
-            <button key={action} className={activeAction === action ? 'action selected' : 'action'} onClick={() => action === 'complete' ? completeCurrent() : setActiveAction(action)}>
+        <div className="action-row" aria-label="Mission actions">
+          {(['note', 'need', 'prayer', 'complete'] as const).map((action) => (
+            <button
+              key={action}
+              type="button"
+              aria-pressed={activeAction === action}
+              className={activeAction === action ? 'action selected' : 'action'}
+              onClick={() => selectAction(action)}
+            >
               {action}
             </button>
           ))}
         </div>
-        {activeAction === 'note' && <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Add or update your note. Notes remain editable after saving." />}
+
+        {activeAction === 'note' && (
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="Add or update your note. Notes remain editable after saving."
+          />
+        )}
         {activeAction === 'need' && <p>Record a need for follow-up.</p>}
         {activeAction === 'prayer' && <p>Record a prayer request with the appropriate privacy level.</p>}
-        {activeAction === 'complete' && <p>Assignment completion is ready to sync to the backend.</p>}
+        {activeAction === 'complete' && <p>Assignment marked complete. Backend sync comes next.</p>}
       </section>
     </main>
   )
