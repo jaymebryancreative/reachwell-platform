@@ -3,16 +3,18 @@ import { Bell, CalendarDays, ChevronDown, FolderKanban, Home, Menu, MessageCircl
 import { MissionMode } from '../features/mission/MissionMode'
 import { ProjectsWorkspace } from '../features/projects/ProjectsWorkspace'
 import { TeamsWorkspace } from '../features/teams/TeamsWorkspace'
+import { PeopleWorkspace } from '../features/people/PeopleWorkspace'
 import './app.css'
 
-type View = 'home' | 'mission' | 'projects' | 'teams' | 'events' | 'communication' | 'admin'
+type View = 'home' | 'people' | 'mission' | 'projects' | 'teams' | 'events' | 'communication' | 'admin'
 
 const navigation: { id: View; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Overview', icon: Home },
-  { id: 'mission', label: 'Mission Mode', icon: ShieldCheck },
-  { id: 'projects', label: 'Projects', icon: FolderKanban },
+  { id: 'people', label: 'People', icon: Users },
   { id: 'teams', label: 'Teams', icon: Users },
+  { id: 'projects', label: 'Projects', icon: FolderKanban },
   { id: 'events', label: 'Events', icon: CalendarDays },
+  { id: 'mission', label: 'Mission Mode', icon: ShieldCheck },
   { id: 'communication', label: 'Communication', icon: MessageCircle },
   { id: 'admin', label: 'Administration', icon: ShieldCheck },
 ]
@@ -37,6 +39,7 @@ export function AppShell() {
       </header>
       <section className="rw-content">
         {view === 'home' && <Overview onNavigate={selectView}/>}
+        {view === 'people' && <PeopleWorkspace/>}
         {view === 'mission' && <MissionMode/>}
         {view === 'projects' && <ProjectsWorkspace/>}
         {view === 'teams' && <TeamsWorkspace/>}
@@ -52,7 +55,7 @@ function Overview({ onNavigate }: { onNavigate: (view: View) => void }) {
   return <div className="rw-overview">
     <div className="rw-hero"><div><span className="rw-eyebrow">Ready to serve</span><h1>One place to organize the work that matters.</h1><p>Reachwell brings people, teams, projects, events, communication, and field operations into one connected workspace.</p></div><button className="rw-primary-button" onClick={() => onNavigate('mission')}>Enter Mission Mode</button></div>
     <div className="rw-overview-grid">
-      <button className="rw-feature-card" onClick={() => onNavigate('projects')}><FolderKanban size={22}/><strong>Organize the work</strong><span>Plan projects, assign simple responsibilities, and see progress without project-management jargon.</span></button>
+      <button className="rw-feature-card" onClick={() => onNavigate('people')}><Users size={22}/><strong>Know your people</strong><span>Build connected profiles, organize relationships, and see where people serve.</span></button>
       <button className="rw-feature-card" onClick={() => onNavigate('teams')}><Users size={22}/><strong>Build your teams</strong><span>Create custom teams, appoint leaders, and organize the people serving with you.</span></button>
       <button className="rw-feature-card" onClick={() => onNavigate('communication')}><MessageCircle size={22}/><strong>Keep teams connected</strong><span>Communication stays connected to the organization, team, event, project, or assignment where it belongs.</span></button>
     </div>
