@@ -32,6 +32,17 @@ export type TeamMembershipRecord = {
   person: Pick<PersonRecord, 'id' | 'first_name' | 'last_name' | 'preferred_name'> | null
 }
 
+type TeamMembershipQueryRecord = Omit<TeamMembershipRecord, 'person'> & {
+  person: TeamMembershipRecord['person'][] | TeamMembershipRecord['person'] | null
+}
+
+export function normalizeTeamMemberships(records: TeamMembershipQueryRecord[]): TeamMembershipRecord[] {
+  return records.map(({ person, ...membership }) => ({
+    ...membership,
+    person: Array.isArray(person) ? (person[0] ?? null) : person,
+  }))
+}
+
 export async function listPeople(organizationId: string) {
   const { data, error } = await supabase.from('people').select('*').eq('organization_id', organizationId).eq('status', 'active').order('created_at', { ascending: false })
   if (error) throw error
@@ -71,7 +82,7 @@ export async function listTeamMemberships(organizationId: string, teamId: string
     .is('ended_at', null)
     .order('joined_at')
   if (error) throw error
-  return (data ?? []) as TeamMembershipRecord[]
+  return normalizeTeamMemberships((data ?? []) as TeamMembershipQueryRecord[])
 }
 
 export async function addPersonToTeam(payload: { organization_id: string; person_id: string; team_id: string; role: string; is_leader: boolean }) {
