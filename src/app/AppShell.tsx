@@ -4,10 +4,14 @@ import { MissionMode } from '../features/mission/MissionMode'
 import { ProjectsWorkspace } from '../features/projects/ProjectsWorkspace'
 import { TeamsWorkspace } from '../features/teams/TeamsWorkspace'
 import { PeopleWorkspace } from '../features/people/PeopleWorkspace'
+import { EventsWorkspace } from '../features/events/EventsWorkspace'
+import { SignInWorkspace } from '../features/signin/SignInWorkspace'
 import { useReachWellContext } from '../lib/reachwellContext'
 import './app.css'
+import '../features/events/events.css'
+import '../features/signin/signin.css'
 
-type View = 'home' | 'people' | 'mission' | 'projects' | 'teams' | 'events' | 'communication' | 'admin'
+type View = 'home' | 'people' | 'mission' | 'projects' | 'teams' | 'events' | 'signin' | 'communication' | 'admin'
 
 const navigation: { id: View; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Overview', icon: Home },
@@ -15,6 +19,7 @@ const navigation: { id: View; label: string; icon: typeof Home }[] = [
   { id: 'teams', label: 'Teams', icon: Users },
   { id: 'projects', label: 'Projects', icon: FolderKanban },
   { id: 'events', label: 'Events', icon: CalendarDays },
+  { id: 'signin', label: 'Sign-In Mode', icon: Users },
   { id: 'mission', label: 'Mission Mode', icon: ShieldCheck },
   { id: 'communication', label: 'Communication', icon: MessageCircle },
   { id: 'admin', label: 'Administration', icon: ShieldCheck },
@@ -24,7 +29,9 @@ export function AppShell() {
   const { user, organizationName, organizationRole, loading: contextLoading, error: contextError } = useReachWellContext()
   const [view, setView] = useState<View>('home')
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [signInEventId, setSignInEventId] = useState<string | undefined>()
   const selectView = (next: View) => { setView(next); setMobileOpen(false) }
+  const openSignIn = (eventId: string) => { setSignInEventId(eventId); selectView('signin') }
   const displayName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'ReachWell member'
   const initials = displayName.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()
 
@@ -48,7 +55,8 @@ export function AppShell() {
         {view === 'mission' && <MissionMode/>}
         {view === 'projects' && <ProjectsWorkspace/>}
         {view === 'teams' && <TeamsWorkspace/>}
-        {view === 'events' && <ComingSoon title="Events" description="Event planning, event-specific teams, attendance, assignments, and field workflows are next in the clean rebuild."/>}
+        {view === 'events' && <EventsWorkspace onOpenSignIn={openSignIn}/>} 
+        {view === 'signin' && <SignInWorkspace eventId={signInEventId} onBack={() => selectView('events')}/>} 
         {view === 'communication' && <ComingSoon title="Communication" description="Organization announcements, team channels, event channels, and assignment discussions will live here."/>}
         {view === 'admin' && <ComingSoon title="Administration" description="Roles, granular permissions, organization settings, security, and audit controls will live here."/>}
       </section>
@@ -62,7 +70,7 @@ function Overview({ onNavigate }: { onNavigate: (view: View) => void }) {
     <div className="rw-overview-grid">
       <button className="rw-feature-card" onClick={() => onNavigate('people')}><Users size={22}/><strong>Know your people</strong><span>Build connected profiles, organize relationships, and see where people serve.</span></button>
       <button className="rw-feature-card" onClick={() => onNavigate('teams')}><Users size={22}/><strong>Build your teams</strong><span>Create custom teams, appoint leaders, and organize the people serving with you.</span></button>
-      <button className="rw-feature-card" onClick={() => onNavigate('communication')}><MessageCircle size={22}/><strong>Keep teams connected</strong><span>Communication stays connected to the organization, team, event, project, or assignment where it belongs.</span></button>
+      <button className="rw-feature-card" onClick={() => onNavigate('events')}><CalendarDays size={22}/><strong>Run real events</strong><span>Turn an event into the context for attendance, teams, assignments, and field work.</span></button>
     </div>
   </div>
 }
