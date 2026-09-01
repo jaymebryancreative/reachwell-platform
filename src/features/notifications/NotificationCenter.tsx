@@ -20,7 +20,19 @@ export function NotificationCenter() {
     setLoading(false)
   }
 
-  useEffect(() => { void load() }, [user?.id])
+  useEffect(() => {
+    void load()
+    if (!user) return
+    const channel = supabase.channel(`reachwell-notifications-${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` }, payload => {
+        setItems(current => [payload.new as NotificationRow, ...current].slice(0, 100))
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` }, payload => {
+        setItems(current => current.map(item => item.id === payload.new.id ? payload.new as NotificationRow : item))
+      })
+      .subscribe()
+    return () => { void supabase.removeChannel(channel) }
+  }, [user?.id])
 
   const markRead = async (id: string) => {
     const readAt = new Date().toISOString()
