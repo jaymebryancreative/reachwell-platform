@@ -36,6 +36,36 @@ type TeamMembershipQueryRecord = Omit<TeamMembershipRecord, 'person'> & {
   person: TeamMembershipRecord['person'][] | TeamMembershipRecord['person'] | null
 }
 
+export type EventRecord = {
+  id: string
+  organization_id: string
+  name: string
+  description: string | null
+  event_type: string
+  starts_at: string
+  ends_at: string | null
+  timezone: string
+  location_name: string | null
+  address_line1: string | null
+  city: string | null
+  state: string | null
+  postal_code: string | null
+  status: string
+  created_at: string
+}
+
+export type EventParticipantRecord = {
+  id: string
+  event_id: string
+  person_id: string | null
+  user_id: string | null
+  team_id: string | null
+  role: string
+  attendance_status: string
+  checked_in_at: string | null
+  person: Pick<PersonRecord, 'id' | 'first_name' | 'last_name' | 'preferred_name'> | null
+}
+
 export function normalizeTeamMemberships(records: TeamMembershipQueryRecord[]): TeamMembershipRecord[] {
   return records.map(({ person, ...membership }) => ({
     ...membership,
@@ -95,4 +125,35 @@ export async function listPersonTeamMemberships(organizationId: string, personId
   const { data, error } = await supabase.from('people_team_memberships').select('id, role, is_leader, team:teams(id, name)').eq('organization_id', organizationId).eq('person_id', personId).is('ended_at', null)
   if (error) throw error
   return data ?? []
+}
+
+export async function listEvents(organizationId: string) {
+  const { data, error } = await supabase.from('events').select('*').eq('organization_id', organizationId).order('starts_at', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as EventRecord[]
+}
+
+export async function createEvent(payload: Omit<EventRecord, 'id' | 'created_at' | 'status'> & { status?: string }) {
+  const { data, error } = await supabase.from('events').insert({ ...payload, status: payload.status ?? 'scheduled' }).select().single()
+  if (error) throw error
+  return data as EventRecord
+}
+
+export async function listEventParticipants(eventId: string) {
+  const { data, error } = await supabase.from('event_participants').select('id, event_id, person_id, user_id, team_id, role, attendance_status, checked_in_at, person:people(id, first_name, last_name, preferred_name)').eq('event_id', eventId).order('created_at')
+  if (error) throw error
+  return (data ?? []) as EventParticipantRecord[]
+}
+
+export async function addPersonToEvent(payload: { event_id: string; person_id: string; team_id?: string | null; role: string }) {
+  const { data, error } = await supabase.from('event_participants').insert({ ...payload, attendance_status: 'not_marked' }).select('id, event_id, person_id, user_id, team_id, role, attendance_status, checked_in_at, person:people(id, first_name, last_name, preferred_name)').single()
+  if (error) throw error
+  return data as EventParticipantRecord
+}
+
+export async function updateAttendance(participantId: string, attendanceStatus: string) {
+  const checkedIn = attendanceStatus === 'present' || attendanceStatus === 'late' ? new Date().toISOString() : null
+  const { data, error } = await supabase.from('event_participants').update({ attendance_status: attendanceStatus, checked_in_at: checkedIn, updated_at: new Date().toISOString() }).eq('id', participantId).select('id, event_id, person_id, user_id, team_id, role, attendance_status, checked_in_at, person:people(id, first_name, last_name, preferred_name)').single()
+  if (error) throw error
+  return data as EventParticipantRecord
 }
