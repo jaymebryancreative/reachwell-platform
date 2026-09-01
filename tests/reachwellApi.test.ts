@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeTeamMemberships, sortFollowUps, type FollowUpRecord } from '../src/lib/reachwellApi'
+import { normalizeEventParticipants, normalizeTeamMemberships, sortFollowUps, type FollowUpRecord } from '../src/lib/reachwellApi'
 
-describe('normalizeTeamMemberships', () => {
+describe('relationship normalization', () => {
   it('normalizes Supabase joined people records to a single person per membership', () => {
     const records = normalizeTeamMemberships([{
       id: 'membership-1', person_id: 'person-1', team_id: 'team-1', role: 'coordinator', is_leader: true,
@@ -17,6 +17,16 @@ describe('normalizeTeamMemberships', () => {
       joined_at: '2026-08-31T00:00:00.000Z', ended_at: null, person: [],
     }])
     expect(records[0].person).toBeNull()
+  })
+
+  it('normalizes event participants whether Supabase returns one person or an array', () => {
+    const records = normalizeEventParticipants([{
+      id: 'participant-1', event_id: 'event-1', person_id: 'person-1', user_id: null, team_id: null,
+      role: 'volunteer', attendance_status: 'present', checked_in_at: '2026-09-01T12:00:00.000Z',
+      person: [{ id: 'person-1', first_name: 'Ada', last_name: 'Lovelace', preferred_name: null }],
+    }])
+    expect(records[0].person?.first_name).toBe('Ada')
+    expect(records[0].attendance_status).toBe('present')
   })
 })
 
