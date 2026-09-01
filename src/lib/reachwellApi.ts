@@ -1,159 +1,35 @@
 import { supabase } from './supabaseClient'
 
-export type PersonRecord = {
-  id: string
-  organization_id: string
-  first_name: string
-  last_name: string
-  preferred_name: string | null
-  email: string | null
-  phone: string | null
-  status: 'active' | 'archived'
-  created_at: string
-}
+export type PersonRecord = { id: string; organization_id: string; first_name: string; last_name: string; preferred_name: string | null; email: string | null; phone: string | null; status: 'active' | 'archived'; created_at: string }
+export type TeamRecord = { id: string; organization_id: string; name: string; description: string | null; active: boolean; created_at: string }
+export type TeamMembershipRecord = { id: string; person_id: string; team_id: string; role: string; is_leader: boolean; joined_at: string; ended_at: string | null; person: Pick<PersonRecord, 'id' | 'first_name' | 'last_name' | 'preferred_name'> | null }
+type TeamMembershipQueryRecord = Omit<TeamMembershipRecord, 'person'> & { person: TeamMembershipRecord['person'][] | TeamMembershipRecord['person'] | null }
+export type EventRecord = { id: string; organization_id: string; name: string; description: string | null; event_type: string; starts_at: string; ends_at: string | null; timezone: string; location_name: string | null; address_line1: string | null; city: string | null; state: string | null; postal_code: string | null; status: string; created_at: string }
+export type EventParticipantRecord = { id: string; event_id: string; person_id: string | null; user_id: string | null; team_id: string | null; role: string; attendance_status: string; checked_in_at: string | null; person: Pick<PersonRecord, 'id' | 'first_name' | 'last_name' | 'preferred_name'> | null }
+export type AssignmentRecord = { id: string; organization_id: string; event_id: string | null; household_id: string | null; person_id: string | null; title: string; address_label: string | null; assignment_type: string; priority: number; sequence_number: number | null; status: string; assigned_team_id: string | null; assigned_user_id: string | null; started_at: string | null; completed_at: string | null; completed_by: string | null; completion_summary: string | null; created_at: string }
+export type AssignmentObjective = { id: string; assignment_id: string; title: string; status: 'open' | 'complete'; sort_order: number; completed_at: string | null; completed_by: string | null }
+export type AssignmentVisit = { id: string; assignment_id: string; person_id: string | null; household_id: string | null; started_at: string; ended_at: string | null; outcome: string | null; summary: string | null }
 
-export type TeamRecord = {
-  id: string
-  organization_id: string
-  name: string
-  description: string | null
-  active: boolean
-  created_at: string
-}
-
-export type TeamMembershipRecord = {
-  id: string
-  person_id: string
-  team_id: string
-  role: string
-  is_leader: boolean
-  joined_at: string
-  ended_at: string | null
-  person: Pick<PersonRecord, 'id' | 'first_name' | 'last_name' | 'preferred_name'> | null
-}
-
-type TeamMembershipQueryRecord = Omit<TeamMembershipRecord, 'person'> & {
-  person: TeamMembershipRecord['person'][] | TeamMembershipRecord['person'] | null
-}
-
-export type EventRecord = {
-  id: string
-  organization_id: string
-  name: string
-  description: string | null
-  event_type: string
-  starts_at: string
-  ends_at: string | null
-  timezone: string
-  location_name: string | null
-  address_line1: string | null
-  city: string | null
-  state: string | null
-  postal_code: string | null
-  status: string
-  created_at: string
-}
-
-export type EventParticipantRecord = {
-  id: string
-  event_id: string
-  person_id: string | null
-  user_id: string | null
-  team_id: string | null
-  role: string
-  attendance_status: string
-  checked_in_at: string | null
-  person: Pick<PersonRecord, 'id' | 'first_name' | 'last_name' | 'preferred_name'> | null
-}
-
-export function normalizeTeamMemberships(records: TeamMembershipQueryRecord[]): TeamMembershipRecord[] {
-  return records.map(({ person, ...membership }) => ({
-    ...membership,
-    person: Array.isArray(person) ? (person[0] ?? null) : person,
-  }))
-}
-
-export async function listPeople(organizationId: string) {
-  const { data, error } = await supabase.from('people').select('*').eq('organization_id', organizationId).eq('status', 'active').order('created_at', { ascending: false })
-  if (error) throw error
-  return (data ?? []) as PersonRecord[]
-}
-
-export async function createPerson(payload: Omit<PersonRecord, 'id' | 'created_at'>) {
-  const { data, error } = await supabase.from('people').insert(payload).select().single()
-  if (error) throw error
-  return data as PersonRecord
-}
-
-export async function archivePerson(personId: string) {
-  const { data, error } = await supabase.from('people').update({ status: 'archived', updated_at: new Date().toISOString() }).eq('id', personId).select().single()
-  if (error) throw error
-  return data as PersonRecord
-}
-
-export async function listTeams(organizationId: string) {
-  const { data, error } = await supabase.from('teams').select('*').eq('organization_id', organizationId).eq('active', true).order('name')
-  if (error) throw error
-  return (data ?? []) as TeamRecord[]
-}
-
-export async function createTeam(payload: Pick<TeamRecord, 'organization_id' | 'name' | 'description'>) {
-  const { data, error } = await supabase.from('teams').insert({ ...payload, active: true }).select().single()
-  if (error) throw error
-  return data as TeamRecord
-}
-
-export async function listTeamMemberships(organizationId: string, teamId: string) {
-  const { data, error } = await supabase
-    .from('people_team_memberships')
-    .select('id, person_id, team_id, role, is_leader, joined_at, ended_at, person:people(id, first_name, last_name, preferred_name)')
-    .eq('organization_id', organizationId)
-    .eq('team_id', teamId)
-    .is('ended_at', null)
-    .order('joined_at')
-  if (error) throw error
-  return normalizeTeamMemberships((data ?? []) as TeamMembershipQueryRecord[])
-}
-
-export async function addPersonToTeam(payload: { organization_id: string; person_id: string; team_id: string; role: string; is_leader: boolean }) {
-  const { data, error } = await supabase.from('people_team_memberships').insert(payload).select().single()
-  if (error) throw error
-  return data
-}
-
-export async function listPersonTeamMemberships(organizationId: string, personId: string) {
-  const { data, error } = await supabase.from('people_team_memberships').select('id, role, is_leader, team:teams(id, name)').eq('organization_id', organizationId).eq('person_id', personId).is('ended_at', null)
-  if (error) throw error
-  return data ?? []
-}
-
-export async function listEvents(organizationId: string) {
-  const { data, error } = await supabase.from('events').select('*').eq('organization_id', organizationId).order('starts_at', { ascending: true })
-  if (error) throw error
-  return (data ?? []) as EventRecord[]
-}
-
-export async function createEvent(payload: Omit<EventRecord, 'id' | 'created_at' | 'status'> & { status?: string }) {
-  const { data, error } = await supabase.from('events').insert({ ...payload, status: payload.status ?? 'scheduled' }).select().single()
-  if (error) throw error
-  return data as EventRecord
-}
-
-export async function listEventParticipants(eventId: string) {
-  const { data, error } = await supabase.from('event_participants').select('id, event_id, person_id, user_id, team_id, role, attendance_status, checked_in_at, person:people(id, first_name, last_name, preferred_name)').eq('event_id', eventId).order('created_at')
-  if (error) throw error
-  return (data ?? []) as EventParticipantRecord[]
-}
-
-export async function addPersonToEvent(payload: { event_id: string; person_id: string; team_id?: string | null; role: string }) {
-  const { data, error } = await supabase.from('event_participants').insert({ ...payload, attendance_status: 'not_marked' }).select('id, event_id, person_id, user_id, team_id, role, attendance_status, checked_in_at, person:people(id, first_name, last_name, preferred_name)').single()
-  if (error) throw error
-  return data as EventParticipantRecord
-}
-
-export async function updateAttendance(participantId: string, attendanceStatus: string) {
-  const checkedIn = attendanceStatus === 'present' || attendanceStatus === 'late' ? new Date().toISOString() : null
-  const { data, error } = await supabase.from('event_participants').update({ attendance_status: attendanceStatus, checked_in_at: checkedIn, updated_at: new Date().toISOString() }).eq('id', participantId).select('id, event_id, person_id, user_id, team_id, role, attendance_status, checked_in_at, person:people(id, first_name, last_name, preferred_name)').single()
-  if (error) throw error
-  return data as EventParticipantRecord
-}
+export function normalizeTeamMemberships(records: TeamMembershipQueryRecord[]): TeamMembershipRecord[] { return records.map(({ person, ...membership }) => ({ ...membership, person: Array.isArray(person) ? (person[0] ?? null) : person })) }
+export async function listPeople(organizationId: string) { const { data, error } = await supabase.from('people').select('*').eq('organization_id', organizationId).eq('status', 'active').order('created_at', { ascending: false }); if (error) throw error; return (data ?? []) as PersonRecord[] }
+export async function createPerson(payload: Omit<PersonRecord, 'id' | 'created_at'>) { const { data, error } = await supabase.from('people').insert(payload).select().single(); if (error) throw error; return data as PersonRecord }
+export async function archivePerson(personId: string) { const { data, error } = await supabase.from('people').update({ status: 'archived', updated_at: new Date().toISOString() }).eq('id', personId).select().single(); if (error) throw error; return data as PersonRecord }
+export async function listTeams(organizationId: string) { const { data, error } = await supabase.from('teams').select('*').eq('organization_id', organizationId).eq('active', true).order('name'); if (error) throw error; return (data ?? []) as TeamRecord[] }
+export async function createTeam(payload: Pick<TeamRecord, 'organization_id' | 'name' | 'description'>) { const { data, error } = await supabase.from('teams').insert({ ...payload, active: true }).select().single(); if (error) throw error; return data as TeamRecord }
+export async function listTeamMemberships(organizationId: string, teamId: string) { const { data, error } = await supabase.from('people_team_memberships').select('id, person_id, team_id, role, is_leader, joined_at, ended_at, person:people(id, first_name, last_name, preferred_name)').eq('organization_id', organizationId).eq('team_id', teamId).is('ended_at', null).order('joined_at'); if (error) throw error; return normalizeTeamMemberships((data ?? []) as TeamMembershipQueryRecord[]) }
+export async function addPersonToTeam(payload: { organization_id: string; person_id: string; team_id: string; role: string; is_leader: boolean }) { const { data, error } = await supabase.from('people_team_memberships').insert(payload).select().single(); if (error) throw error; return data }
+export async function listPersonTeamMemberships(organizationId: string, personId: string) { const { data, error } = await supabase.from('people_team_memberships').select('id, role, is_leader, team:teams(id, name)').eq('organization_id', organizationId).eq('person_id', personId).is('ended_at', null); if (error) throw error; return data ?? [] }
+export async function listEvents(organizationId: string) { const { data, error } = await supabase.from('events').select('*').eq('organization_id', organizationId).order('starts_at', { ascending: true }); if (error) throw error; return (data ?? []) as EventRecord[] }
+export async function createEvent(payload: Omit<EventRecord, 'id' | 'created_at' | 'status'> & { status?: string }) { const { data, error } = await supabase.from('events').insert({ ...payload, status: payload.status ?? 'scheduled' }).select().single(); if (error) throw error; return data as EventRecord }
+export async function listEventParticipants(eventId: string) { const { data, error } = await supabase.from('event_participants').select('id, event_id, person_id, user_id, team_id, role, attendance_status, checked_in_at, person:people(id, first_name, last_name, preferred_name)').eq('event_id', eventId).order('created_at'); if (error) throw error; return (data ?? []) as EventParticipantRecord[] }
+export async function addPersonToEvent(payload: { event_id: string; person_id: string; team_id?: string | null; role: string }) { const { data, error } = await supabase.from('event_participants').insert({ ...payload, attendance_status: 'not_marked' }).select('id, event_id, person_id, user_id, team_id, role, attendance_status, checked_in_at, person:people(id, first_name, last_name, preferred_name)').single(); if (error) throw error; return data as EventParticipantRecord }
+export async function updateAttendance(participantId: string, attendanceStatus: string) { const checkedIn = attendanceStatus === 'present' || attendanceStatus === 'late' ? new Date().toISOString() : null; const { data, error } = await supabase.from('event_participants').update({ attendance_status: attendanceStatus, checked_in_at: checkedIn, updated_at: new Date().toISOString() }).eq('id', participantId).select('id, event_id, person_id, user_id, team_id, role, attendance_status, checked_in_at, person:people(id, first_name, last_name, preferred_name)').single(); if (error) throw error; return data as EventParticipantRecord }
+export async function listAssignments(organizationId: string, userId: string) { const { data, error } = await supabase.from('assignments').select('*').eq('organization_id', organizationId).or(`assigned_user_id.eq.${userId},assigned_team_id.not.is.null`).neq('status', 'complete').order('sequence_number', { ascending: true, nullsFirst: false }); if (error) throw error; return (data ?? []) as AssignmentRecord[] }
+export async function updateAssignmentStatus(assignmentId: string, status: string, userId: string, summary?: string) { const values = status === 'complete' ? { status, completed_at: new Date().toISOString(), completed_by: userId, completion_summary: summary ?? null, updated_at: new Date().toISOString() } : { status, started_at: new Date().toISOString(), updated_at: new Date().toISOString() }; const { data, error } = await supabase.from('assignments').update(values).eq('id', assignmentId).select().single(); if (error) throw error; return data as AssignmentRecord }
+export async function listAssignmentObjectives(assignmentId: string) { const { data, error } = await supabase.from('assignment_objectives').select('id, assignment_id, title, status, sort_order, completed_at, completed_by').eq('assignment_id', assignmentId).order('sort_order'); if (error) throw error; return (data ?? []) as AssignmentObjective[] }
+export async function completeAssignmentObjective(objectiveId: string, userId: string) { const { data, error } = await supabase.from('assignment_objectives').update({ status: 'complete', completed_at: new Date().toISOString(), completed_by: userId, updated_at: new Date().toISOString() }).eq('id', objectiveId).select().single(); if (error) throw error; return data as AssignmentObjective }
+export async function saveAssignmentNote(assignmentId: string, organizationId: string, authorId: string, body: string) { const { data, error } = await supabase.from('assignment_notes').insert({ assignment_id: assignmentId, organization_id: organizationId, author_id: authorId, body, visibility: 'team', is_current: true }).select().single(); if (error) throw error; return data }
+export async function createNeed(assignmentId: string, organizationId: string, createdBy: string, title: string, description: string) { const { data, error } = await supabase.from('needs').insert({ assignment_id: assignmentId, organization_id: organizationId, title, description, category: 'outreach', urgency: 'normal', status: 'open', visibility: 'team', created_by: createdBy }).select().single(); if (error) throw error; return data }
+export async function createPrayerRequest(assignmentId: string, organizationId: string, createdBy: string, requestText: string) { const { data, error } = await supabase.from('prayer_requests').insert({ assignment_id: assignmentId, organization_id: organizationId, request_text: requestText, privacy_level: 'team', status: 'open', created_by: createdBy }).select().single(); if (error) throw error; return data }
+export async function startAssignmentVisit(assignmentId: string, organizationId: string, createdBy: string, personId?: string | null, householdId?: string | null) { const { data, error } = await supabase.from('assignment_visits').insert({ assignment_id: assignmentId, organization_id: organizationId, created_by: createdBy, person_id: personId ?? null, household_id: householdId ?? null }).select().single(); if (error) throw error; return data as AssignmentVisit }
+export async function finishAssignmentVisit(visitId: string, outcome: string, summary: string) { const { data, error } = await supabase.from('assignment_visits').update({ ended_at: new Date().toISOString(), outcome, summary, updated_at: new Date().toISOString() }).eq('id', visitId).select().single(); if (error) throw error; return data as AssignmentVisit }
