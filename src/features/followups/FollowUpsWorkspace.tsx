@@ -1,0 +1,49 @@
+import { useEffect, useState } from 'react'
+import { Check, Plus, RotateCcw } from 'lucide-react'
+import { completeFollowUp, createFollowUp, listFollowUps, type FollowUpRecord } from '../../lib/reachwellApi'
+import { useReachWellContext } from '../../lib/reachwellContext'
+import './followups.css'
+
+export function FollowUpsWorkspace() {
+  const { organizationId, user } = useReachWellContext()
+  const [items, setItems] = useState<FollowUpRecord[]>([])
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [dueAt, setDueAt] = useState('')
+  const [priority, setPriority] = useState('normal')
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = async () => {
+    if (!organizationId) return
+    try { setItems(await listFollowUps(organizationId)); setError(null) }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to load follow-ups.') }
+  }
+  useEffect(() => { void load() }, [organizationId])
+
+  const add = async () => {
+    if (!organizationId || !user || !title.trim()) return
+    setSaving(true); setError(null)
+    try {
+      const item = await createFollowUp({ organization_id: organizationId, title: title.trim(), description: description.trim() || null, due_at: dueAt ? new Date(dueAt).toISOString() : null, priority, created_by: user.id })
+      setItems(current => [...current, item].sort((a, b) => (a.due_at ?? '9999').localeCompare(b.due_at ?? '9999')))
+      setTitle(''); setDescription(''); setDueAt(''); setPriority('normal'); setOpen(false); setMessage('Follow-up created.')
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to create follow-up.') }
+    finally { setSaving(false) }
+  }
+
+  const complete = async (id: string) => {
+    if (!user) return
+    try { await completeFollowUp(id, user.id); setItems(current => current.filter(item => item.id !== id)); setMessage('Follow-up completed.') }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to complete follow-up.') }
+  }
+
+  return <div className="followups-workspace">
+    <div className="followups-hero"><div><span className="rw-eyebrow">RELATIONSHIP CARE</span><h1>Follow-Ups</h1><p>Keep every next step connected to the people and field work that created it.</p></div><button className="rw-primary-button" onClick={() => setOpen(true)}><Plus size={17}/> New follow-up</button></div>
+    {open && <section className="followup-form"><div className="followup-form-heading"><div><span className="rw-eyebrow">NEW FOLLOW-UP</span><h2>What needs to happen next?</h2></div><button className="followup-text-button" onClick={() => setOpen(false)}>Cancel</button></div><label>Title<input value={title} onChange={e => setTitle(e.target.value)} placeholder="Call back about housing support" /></label><label>Description<textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Capture the context the next person needs." /></label><div className="followup-form-grid"><label>Due date<input type="datetime-local" value={dueAt} onChange={e => setDueAt(e.target.value)} /></label><label>Priority<select value={priority} onChange={e => setPriority(e.target.value)}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label></div><button className="rw-primary-button" onClick={() => void add()} disabled={!title.trim() || saving}>{saving ? 'Saving…' : 'Create follow-up'}</button></section>}
+    <section className="followup-list">{items.map(item => <article className="followup-row" key={item.id}><div><div className="followup-title-line"><strong>{item.title}</strong><span className={`priority ${item.priority}`}>{item.priority}</span></div>{item.description && <p>{item.description}</p>}<small>{item.due_at ? `Due ${new Date(item.due_at).toLocaleString()}` : 'No due date'}</small></div><button className="followup-complete" onClick={() => void complete(item.id)}><Check size={17}/> Complete</button></article>)}{!items.length && <div className="followup-empty"><RotateCcw size={22}/><strong>No open follow-ups</strong><span>New follow-ups created from field work will appear here.</span></div>}</section>
+    {message && <div className="mission-toast" role="status">{message}</div>}{error && <div className="mission-error" role="alert">{error}</div>}
+  </div>
+}
