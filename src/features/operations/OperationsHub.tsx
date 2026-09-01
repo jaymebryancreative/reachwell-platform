@@ -1,12 +1,106 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useState } from 'react'
-import { Activity, BookOpen, Check, DollarSign, HeartPulse, MessageCircle, RefreshCw, Search, ShieldCheck } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Activity, BookOpen, Check, DollarSign, HeartPulse, MessageCircle, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react'
 import { useReachWellContext } from '../../lib/reachwellContext'
 import { supabase } from '../../lib/supabaseClient'
 import './operations.css'
 
-type Section='relationships'|'followups'|'activity'|'communication'|'resources'|'finance'|'admin'
-const titles:Record<Section,string>={relationships:'Relationship Health',followups:'Follow-Up Center',activity:'Unified Activity',communication:'Team Communication',resources:'Resource Center',finance:'Giving & Finance',admin:'Administration Center'}
-export function OperationsHub({section}:{section:Section}){const{organizationId,user}=useReachWellContext();const[rows,setRows]=useState<any[]>([]);const[channels,setChannels]=useState<any[]>([]);const[channel,setChannel]=useState('');const[q,setQ]=useState('');const[msg,setMsg]=useState('');const[error,setError]=useState('');const[loading,setLoading]=useState(false)
-const load=async()=>{if(!organizationId)return;setLoading(true);setError('');try{if(section==='relationships'){const[{data:p,error:a},{data:f,error:b},{data:n,error:c},{data:r,error:d}]=await Promise.all([supabase.from('people').select('id,first_name,last_name,preferred_name').eq('organization_id',organizationId).eq('status','active').order('first_name'),supabase.from('follow_ups').select('person_id').eq('organization_id',organizationId).neq('status','completed'),supabase.from('needs').select('person_id,urgency').eq('organization_id',organizationId).in('status',['open','in_progress']),supabase.from('prayer_requests').select('person_id').eq('organization_id',organizationId).eq('status','active')]);if(a||b||c||d)throw a||b||c||d;setRows((p??[]).map(x=>({person:x,followups:(f??[]).filter(y=>y.person_id===x.id).length,needs:(n??[]).filter(y=>y.person_id===x.id),prayers:(r??[]).filter(y=>y.person_id===x.id).length})))}else if(section==='followups'){const{data,error}=await supabase.from('follow_ups').select('*').eq('organization_id',organizationId).neq('status','completed').order('due_at',{ascending:true,nullsFirst:false});if(error)throw error;setRows(data??[])}else if(section==='activity'){const{data,error}=await supabase.from('assignment_activity').select('*').eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(100);if(error)throw error;setRows(data??[])}else if(section==='communication'){const{data,error}=await supabase.from('communication_channels').select('*').eq('organization_id',organizationId).is('archived_at',null).order('name');if(error)throw error;setChannels(data??[]);setChannel(c=>c||data?.[0]?.id||'')}else if(section==='resources'){const{data,error}=await supabase.from('organization_files').select('*').eq('organization_id',organizationId).is('deleted_at',null).order('created_at',{ascending:false});if(error)throw error;setRows(data??[])}else if(section==='finance'){const{data,error}=await supabase.from('financial_transactions').select('id,transaction_type,amount,currency,transaction_date,payee_or_source,description,status').eq('organization_id',organizationId).order('transaction_date',{ascending:false}).limit(100);if(error)throw error;setRows(data??[])}else{const{data,error}=await supabase.from('organization_members').select('id,user_id,role,status,joined_at').eq('organization_id',organizationId).order('role');if(error)throw error;setRows(data??[])}}catch(e){setError(e instanceof Error?e.message:'Unable to load workspace.')}finally{setLoading(false)}};useEffect(()=>{void load()},[organizationId,section]);const filtered=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));const send=async()=>{if(!channel||!user||!msg.trim())return;const{error}=await supabase.from('communication_messages').insert({channel_id:channel,author_id:user.id,body:msg.trim()});if(error)setError(error.message);else setMsg('')};return <div className="ops-hub"><header className="ops-heading"><div><span className="rw-eyebrow">REACHWELL OPERATIONS</span><h1>{titles[section]}</h1><p>{section==='relationships'?'See who needs care, contact, prayer, or a next step.':section==='followups'?'Every next step, prioritized and visible.':section==='activity'?'A durable operational story in one timeline.':section==='communication'?'Keep conversations close to the work.':section==='resources'?'One searchable home for organizational knowledge.':section==='finance'?'A clear, accountable money trail.':'Manage membership and organizational access.'}</p></div><button className="rw-secondary-button" onClick={()=>void load()}><RefreshCw size={16}/> Refresh</button></header>{error&&<div className="rw-context-alert">{error}</div>}{section==='communication'?<div className="ops-communication"><aside>{channels.map(c=><button key={c.id} className={channel===c.id?'selected':''} onClick={()=>setChannel(c.id)}><MessageCircle size={16}/>{c.name}</button>)}</aside><section><Messages channelId={channel}/><div className="ops-composer"><input value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Write to the team…"/><button className="rw-primary-button" onClick={()=>void send()} disabled={!msg.trim()}>Send</button></div></section></div>:<><div className="ops-toolbar"><div className="ops-search"><Search size={16}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder={`Search ${titles[section].toLowerCase()}`}/></div><span className="ops-count">{filtered.length} records</span></div><div className="ops-list">{loading&&<div className="rw-empty-state">Loading…</div>}{!loading&&filtered.map(r=><article className={r.needs?.some((n:any)=>['high','critical'].includes(n.urgency))?'ops-card urgent':'ops-card'} key={r.id||r.person?.id}>{section==='relationships'?<><HeartPulse size={18}/><div><strong>{(r.person.preferred_name||`${r.person.first_name} ${r.person.last_name||''}`).trim()}</strong><small>{r.needs.length} needs · {r.prayers} prayers · {r.followups} follow-ups</small></div></>:section==='followups'?<><Check size={18}/><div><strong>{r.title}</strong><small>{r.due_at?`Due ${new Date(r.due_at).toLocaleString()}`:'No due date'} · {r.priority}</small></div></>:section==='activity'?<><Activity size={18}/><div><strong>{r.activity_type}</strong><small>{new Date(r.created_at).toLocaleString()}</small></div></>:section==='resources'?<><BookOpen size={18}/><div><strong>{r.file_name}</strong><small>{r.folder||'General'} · {r.mime_type||'File'}</small></div></>:section==='finance'?<><DollarSign size={18}/><div><strong>{r.transaction_type} · {Number(r.amount).toLocaleString(undefined,{style:'currency',currency:r.currency||'USD'})}</strong><small>{r.payee_or_source||r.description||'No description'} · {r.status}</small></div></>:<><ShieldCheck size={18}/><div><strong>{r.role}</strong><small>{r.user_id} · {r.status}</small></div></>}</article>)}{!loading&&!filtered.length&&<div className="rw-empty-state"><h2>Nothing here yet</h2><p>This workspace will fill as the organization uses ReachWell.</p></div>}</div></>}</div>}
-function Messages({channelId}:{channelId:string}){const[items,setItems]=useState<any[]>([]);useEffect(()=>{if(!channelId)return;void supabase.from('communication_messages').select('*').eq('channel_id',channelId).is('deleted_at',null).order('created_at',{ascending:true}).then(({data})=>setItems(data??[]))},[channelId]);return <div className="ops-message-list">{items.map(x=><div className="ops-message" key={x.id}><strong>{x.author_id}</strong><p>{x.body}</p><small>{new Date(x.created_at).toLocaleString()}</small></div>)}</div>}
+type Section = 'relationships' | 'followups' | 'activity' | 'communication' | 'resources' | 'finance' | 'admin'
+type LooseRow = Record<string, unknown>
+const titles: Record<Section, string> = { relationships: 'Relationship Health', followups: 'Follow-Up Center', activity: 'Unified Activity', communication: 'Team Communication', resources: 'Resource Center', finance: 'Giving & Finance', admin: 'Administration Center' }
+const asText = (value: unknown) => typeof value === 'string' ? value : ''
+const asNumber = (value: unknown) => typeof value === 'number' ? value : Number(value ?? 0)
+
+export function OperationsHub({ section }: { section: Section }) {
+  const { organizationId, user } = useReachWellContext()
+  const [rows, setRows] = useState<LooseRow[]>([])
+  const [channels, setChannels] = useState<LooseRow[]>([])
+  const [channel, setChannel] = useState('')
+  const [query, setQuery] = useState('')
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const load = async () => {
+    if (!organizationId) return
+    setLoading(true); setError('')
+    try {
+      if (section === 'relationships') {
+        const [people, followUps, needs, prayers] = await Promise.all([
+          supabase.from('people').select('id,first_name,last_name,preferred_name').eq('organization_id', organizationId).eq('status', 'active').order('first_name'),
+          supabase.from('follow_ups').select('person_id,household_id,title,due_at,priority,status').eq('organization_id', organizationId).neq('status', 'completed'),
+          supabase.from('needs').select('person_id,household_id,title,urgency,status').eq('organization_id', organizationId).in('status', ['open', 'in_progress']),
+          supabase.from('prayer_requests').select('person_id,household_id,request_text,status').eq('organization_id', organizationId).eq('status', 'active'),
+        ])
+        if (people.error || followUps.error || needs.error || prayers.error) throw people.error || followUps.error || needs.error || prayers.error
+        const followRows = followUps.data ?? [], needRows = needs.data ?? [], prayerRows = prayers.data ?? []
+        setRows((people.data ?? []).map(person => ({ person, followups: followRows.filter(item => item.person_id === person.id).length, needs: needRows.filter(item => item.person_id === person.id), prayers: prayerRows.filter(item => item.person_id === person.id).length })))
+      } else if (section === 'followups') {
+        const { data, error: loadError } = await supabase.from('follow_ups').select('id,title,description,due_at,priority,status,assigned_to,person_id,household_id,assignment_id,created_at').eq('organization_id', organizationId).neq('status', 'completed').order('due_at', { ascending: true, nullsFirst: false })
+        if (loadError) throw loadError
+        setRows(data ?? [])
+      } else if (section === 'activity') {
+        const { data, error: loadError } = await supabase.from('assignment_activity').select('*').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(100)
+        if (loadError) throw loadError
+        setRows(data ?? [])
+      } else if (section === 'communication') {
+        const { data, error: loadError } = await supabase.from('communication_channels').select('*').eq('organization_id', organizationId).is('archived_at', null).order('name')
+        if (loadError) throw loadError
+        setChannels(data ?? []); setChannel(current => current || asText(data?.[0]?.id) || '')
+      } else if (section === 'resources') {
+        const { data, error: loadError } = await supabase.from('organization_files').select('id,file_name,folder,mime_type,size_bytes,storage_path,created_at').eq('organization_id', organizationId).is('deleted_at', null).order('created_at', { ascending: false })
+        if (loadError) throw loadError
+        setRows(data ?? [])
+      } else if (section === 'finance') {
+        const { data, error: loadError } = await supabase.from('financial_transactions').select('id,transaction_type,amount,currency,transaction_date,payee_or_source,description,status,reference_number').eq('organization_id', organizationId).order('transaction_date', { ascending: false }).limit(100)
+        if (loadError) throw loadError
+        setRows(data ?? [])
+      } else {
+        const { data, error: loadError } = await supabase.from('organization_members').select('id,user_id,role,status,joined_at,created_at').eq('organization_id', organizationId).order('role').order('created_at')
+        if (loadError) throw loadError
+        setRows(data ?? [])
+      }
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load workspace.') }
+    finally { setLoading(false) }
+  }
+  useEffect(() => { void load() }, [organizationId, section])
+
+  const filtered = useMemo(() => rows.filter(row => JSON.stringify(row).toLowerCase().includes(query.toLowerCase())), [rows, query])
+  const send = async () => {
+    if (!channel || !user || !message.trim()) return
+    const { error: sendError } = await supabase.from('communication_messages').insert({ channel_id: channel, author_id: user.id, body: message.trim() })
+    if (sendError) setError(sendError.message); else setMessage('')
+  }
+
+  return <div className="ops-hub">
+    <header className="ops-heading"><div><span className="rw-eyebrow">REACHWELL OPERATIONS</span><h1>{titles[section]}</h1><p>{section === 'relationships' ? 'See the people and households where a next step, need, or prayer deserves attention.' : section === 'followups' ? 'Prioritize overdue work, upcoming commitments, and the next action for every relationship.' : section === 'activity' ? 'A durable operational story that keeps field work accountable.' : section === 'communication' ? 'Keep conversations close to the teams, events, and assignments they support.' : section === 'resources' ? 'One searchable home for organizational knowledge and field resources.' : section === 'finance' ? 'A clear, accountable money trail with transaction status and source details.' : 'Manage organizational membership and access visibility.'}</p></div><button className="rw-secondary-button" onClick={() => void load()} disabled={loading}><RefreshCw size={16} /> {loading ? 'Refreshing…' : 'Refresh'}</button></header>
+    {error && <div className="rw-context-alert" role="alert">{error}</div>}
+    {section === 'communication' ? <Communication channels={channels} channel={channel} setChannel={setChannel} message={message} setMessage={setMessage} send={() => void send()} query={query} setQuery={setQuery} /> : <>
+      <div className="ops-toolbar"><div className="ops-search"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={`Search ${titles[section].toLowerCase()}`} /></div><span className="ops-count">{filtered.length} {filtered.length === 1 ? 'record' : 'records'}</span></div>
+      <div className="ops-list">{loading && <div className="rw-empty-state">Loading…</div>}{!loading && filtered.map(row => <OperationCard key={asText(row.id) || asText((row.person as LooseRow | undefined)?.id)} section={section} row={row} />)}{!loading && !filtered.length && <div className="rw-empty-state"><h2>Nothing here yet</h2><p>This workspace will fill as the organization uses ReachWell.</p></div>}</div>
+    </>}
+  </div>
+}
+
+function OperationCard({ section, row }: { section: Section; row: LooseRow }) {
+  if (section === 'relationships') {
+    const person = (row.person ?? {}) as LooseRow, name = (asText(person.preferred_name) || `${asText(person.first_name)} ${asText(person.last_name)}`).trim(), needs = (row.needs as LooseRow[] | undefined) ?? []
+    return <article className={`ops-card ${needs.some(item => ['high', 'critical'].includes(asText(item.urgency))) ? 'urgent' : ''}`}><HeartPulse size={18} /><div><strong>{name || 'Unnamed person'}</strong><small>{needs.length} needs · {asNumber(row.prayers)} prayers · {asNumber(row.followups)} follow-ups</small>{needs.slice(0, 2).map(item => <span className="ops-inline-alert" key={`${asText(item.title)}-${asText(item.urgency)}`}>{asText(item.urgency)} · {asText(item.title)}</span>)}</div></article>
+  }
+  if (section === 'followups') return <article className="ops-card"><Check size={18} /><div><strong>{asText(row.title)}</strong><small>{row.due_at ? `Due ${new Date(asText(row.due_at)).toLocaleString()}` : 'No due date'} · {asText(row.priority)} · {asText(row.status)}</small><span className="ops-context-line">{asText(row.person_id) ? 'Connected to a person' : asText(row.household_id) ? 'Connected to a household' : asText(row.assignment_id) ? 'Created from field work' : 'Standalone follow-up'}</span></div></article>
+  if (section === 'activity') return <article className="ops-card"><Activity size={18} /><div><strong>{asText(row.activity_type)}</strong><small>{new Date(asText(row.created_at)).toLocaleString()}</small><span className="ops-context-line">Assignment {asText(row.assignment_id).slice(0, 8)}</span></div></article>
+  if (section === 'resources') return <article className="ops-card"><BookOpen size={18} /><div><strong>{asText(row.file_name)}</strong><small>{asText(row.folder) || 'General'} · {asText(row.mime_type) || 'File'}</small><span className="ops-context-line">{row.size_bytes ? `${Math.round(asNumber(row.size_bytes) / 1024)} KB` : 'Size unavailable'}</span></div></article>
+  if (section === 'finance') { const currency = asText(row.currency) || 'USD'; return <article className="ops-card"><DollarSign size={18} /><div><strong>{asText(row.transaction_type)} · {asNumber(row.amount).toLocaleString(undefined, { style: 'currency', currency })}</strong><small>{asText(row.payee_or_source) || asText(row.description) || 'No description'} · {asText(row.transaction_date)}</small><span className="ops-context-line">Status: {asText(row.status)}{asText(row.reference_number) ? ` · Ref ${asText(row.reference_number)}` : ''}</span></div></article> }
+  return <article className="ops-card"><ShieldCheck size={18} /><div><strong>{asText(row.role)}</strong><small>{asText(row.status)} · User {asText(row.user_id).slice(0, 8)}</small><span className="ops-context-line">{row.joined_at ? `Joined ${new Date(asText(row.joined_at)).toLocaleDateString()}` : 'Membership record'}</span></div></article>
+}
+
+function Communication({ channels, channel, setChannel, message, setMessage, send, query, setQuery }: { channels: LooseRow[]; channel: string; setChannel: (value: string) => void; message: string; setMessage: (value: string) => void; send: () => void; query: string; setQuery: (value: string) => void }) {
+  return <div className="ops-communication"><aside><div className="ops-channel-heading"><strong>Channels</strong><span>{channels.length}</span></div>{channels.map(item => <button key={asText(item.id)} className={channel === asText(item.id) ? 'selected' : ''} onClick={() => setChannel(asText(item.id))}><MessageCircle size={16} />{asText(item.name)}</button>)}{!channels.length && <p className="ops-muted">No channels yet.</p>}</aside><section><div className="ops-toolbar"><div className="ops-search"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search all visible messages" /></div></div><Messages channelId={channel} query={query} /><div className="ops-composer"><input value={message} onChange={event => setMessage(event.target.value)} placeholder="Write to the team…" onKeyDown={event => { if (event.key === 'Enter') send() }} /><button className="rw-primary-button" onClick={send} disabled={!message.trim()}>Send</button></div></section></div>
+}
+
+function Messages({ channelId, query }: { channelId: string; query: string }) {
+  const [items, setItems] = useState<LooseRow[]>([])
+  const [error, setError] = useState('')
+  useEffect(() => { if (!channelId) { setItems([]); return } const run = async () => { const { data, error: loadError } = await supabase.from('communication_messages').select('id,author_id,body,created_at').eq('channel_id', channelId).is('deleted_at', null).order('created_at', { ascending: true }); if (loadError) setError(loadError.message); else { setError(''); setItems(data ?? []) } }; void run() }, [channelId])
+  const filtered = items.filter(item => JSON.stringify(item).toLowerCase().includes(query.toLowerCase()))
+  return <div className="ops-message-list">{error && <div className="rw-context-alert">{error}</div>}{filtered.map(item => <div className="ops-message" key={asText(item.id)}><strong>{asText(item.author_id).slice(0, 8) || 'Member'}</strong><p>{asText(item.body)}</p><small>{new Date(asText(item.created_at)).toLocaleString()}</small></div>)}{!error && !filtered.length && <div className="ops-empty-inline">No matching messages.</div>}</div>
+}
