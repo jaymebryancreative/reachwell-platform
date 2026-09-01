@@ -4,6 +4,7 @@ import { MissionMode } from '../features/mission/MissionMode'
 import { ProjectsWorkspace } from '../features/projects/ProjectsWorkspace'
 import { TeamsWorkspace } from '../features/teams/TeamsWorkspace'
 import { PeopleWorkspace } from '../features/people/PeopleWorkspace'
+import { useReachWellContext } from '../lib/reachwellContext'
 import './app.css'
 
 type View = 'home' | 'people' | 'mission' | 'projects' | 'teams' | 'events' | 'communication' | 'admin'
@@ -20,9 +21,12 @@ const navigation: { id: View; label: string; icon: typeof Home }[] = [
 ]
 
 export function AppShell() {
+  const { user, organizationName, organizationRole, loading: contextLoading, error: contextError } = useReachWellContext()
   const [view, setView] = useState<View>('home')
   const [mobileOpen, setMobileOpen] = useState(false)
   const selectView = (next: View) => { setView(next); setMobileOpen(false) }
+  const displayName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'ReachWell member'
+  const initials = displayName.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()
 
   return <div className="rw-app-shell">
     <aside className={`rw-sidebar ${mobileOpen ? 'is-open' : ''}`} aria-label="Primary navigation">
@@ -34,11 +38,12 @@ export function AppShell() {
     <main className="rw-main">
       <header className="rw-topbar">
         <button className="rw-icon-button rw-mobile-menu" onClick={() => setMobileOpen(v => !v)} aria-label="Toggle navigation">{mobileOpen ? <X size={21}/> : <Menu size={21}/>}</button>
-        <div className="rw-context"><span className="rw-eyebrow">Organization workspace</span><strong>{navigation.find(n => n.id === view)?.label}</strong></div>
-        <div className="rw-topbar-actions"><button className="rw-icon-button" aria-label="Notifications"><Bell size={19}/></button><button className="rw-user-menu"><span className="rw-avatar">JB</span><span className="rw-user-copy"><strong>Jordan Bryan</strong><small>Organization Owner</small></span><ChevronDown size={16}/></button></div>
+        <div className="rw-context"><span className="rw-eyebrow">{organizationName || (contextLoading ? 'Connecting workspace' : 'Organization workspace')}</span><strong>{navigation.find(n => n.id === view)?.label}</strong></div>
+        <div className="rw-topbar-actions"><button className="rw-icon-button" aria-label="Notifications"><Bell size={19}/></button><button className="rw-user-menu"><span className="rw-avatar">{initials || 'RW'}</span><span className="rw-user-copy"><strong>{displayName}</strong><small>{organizationRole || (contextError ? 'Organization access required' : 'ReachWell member')}</small></span><ChevronDown size={16}/></button></div>
       </header>
+      {contextError && <div className="rw-context-alert" role="status">{contextError}</div>}
       <section className="rw-content">
-        {view === 'home' && <Overview onNavigate={selectView}/>}
+        {view === 'home' && <Overview onNavigate={selectView}/>} 
         {view === 'people' && <PeopleWorkspace/>}
         {view === 'mission' && <MissionMode/>}
         {view === 'projects' && <ProjectsWorkspace/>}
