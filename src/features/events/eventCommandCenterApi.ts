@@ -9,6 +9,7 @@ export type EventTeamRecord = {
 }
 
 export async function listEventTeams(eventId: string, organizationId: string) {
+  void organizationId
   const { data, error } = await supabase
     .from('event_teams')
     .select('id, event_id, team_id, created_at, team:teams(id, name)')
