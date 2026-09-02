@@ -33,12 +33,17 @@ export function MissionMode() {
     if (!organizationId || !user) { setAssignments([]); setCurrentId(null); return }
     setLoading(true); setError(null)
     try {
-      const next = (await listAssignments(organizationId, user.id)).filter(a => a.status !== 'completed')
+      const next = await listAssignments(organizationId, user.id)
       setAssignments(next); setCurrentId(current => current && next.some(a => a.id === current) ? current : (next[0]?.id ?? null))
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load your mission assignments.') }
     finally { setLoading(false) }
   }
   useEffect(() => { void load() }, [organizationId, user?.id, contextLoading])
+  useEffect(() => {
+    if (!organizationId) return
+    const channel = supabase.channel(`mission-operations-${organizationId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'assignments', filter: `organization_id=eq.${organizationId}` }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'assignment_safety_alerts', filter: `organization_id=eq.${organizationId}` }, payload => { if (payload.eventType === 'INSERT') setMessage('A field safety alert was reported to the organization.') }).subscribe()
+    return () => { void supabase.removeChannel(channel) }
+  }, [organizationId, user?.id])
   useEffect(() => { if (!currentId) { setObjectives([]); return }; void listAssignmentObjectives(currentId).then(setObjectives).catch(err => setError(err instanceof Error ? err.message : 'Unable to load objectives.')) }, [currentId])
 
   const current = assignments.find(a => a.id === currentId) ?? assignments[0]
