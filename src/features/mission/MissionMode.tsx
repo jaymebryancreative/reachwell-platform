@@ -30,10 +30,9 @@ export function MissionMode() {
       setMissionState(state => {
         if (!state.enabled) return state
         if (state.selectedAssignmentId && next.some(item => item.id === state.selectedAssignmentId)) return state
-        return selectMissionAssignment(state, next[0]?.id ?? '')
+        return next[0] ? selectMissionAssignment(state, next[0].id) : exitMissionMode()
       })
-    }
-    catch (err) { setError(err instanceof Error ? err.message : 'Unable to load your mission assignments.') } finally { setLoading(false) }
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load your mission assignments.') } finally { setLoading(false) }
   }
   useEffect(() => { void load() }, [organizationId, user?.id, contextLoading])
   useEffect(() => { if (!organizationId) return; const channel = supabase.channel(`mission-operations-${organizationId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'assignments', filter: `organization_id=eq.${organizationId}` }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'assignment_safety_alerts', filter: `organization_id=eq.${organizationId}` }, payload => { if (payload.eventType === 'INSERT') setMessage('A field safety alert was reported to the organization.') }).subscribe(); return () => { void supabase.removeChannel(channel) } }, [organizationId, user?.id])
