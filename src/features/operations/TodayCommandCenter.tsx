@@ -1,0 +1,36 @@
+import { useEffect, useMemo, useState } from 'react'
+import { AlertCircle, CalendarDays, CheckCircle2, Clock3, MapPin, RefreshCw, Users } from 'lucide-react'
+import { useReachWellContext } from '../../lib/reachwellContext'
+import { supabase } from '../../lib/supabaseClient'
+import { getAssignmentProgress } from '../../lib/fieldWorkflow'
+
+export function TodayCommandCenter({ onOpenMission, onOpenSignIn }: { onOpenMission?: () => void; onOpenSignIn?: (eventId: string) => void }) {
+  const { organizationId } = useReachWellContext()
+  const [assignments, setAssignments] = useState<Record<string, unknown>[]>([])
+  const [events, setEvents] = useState<Record<string, unknown>[]>([])
+  const [followUps, setFollowUps] = useState<Record<string, unknown>[]>([])
+  const [needs, setNeeds] = useState<Record<string, unknown>[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const load = async () => {
+    if (!organizationId) return
+    setLoading(true); setError(null)
+    try {
+      const start = new Date(); start.setHours(0, 0, 0, 0)
+      const end = new Date(start); end.setDate(end.getDate() + 1)
+      const [assignmentResult, eventResult, followResult, needResult] = await Promise.all([
+        supabase.from('assignments').select('id,title,address_label,status,priority,sequence_number,assigned_team_id,assigned_user_id,person_id,household_id,updated_at').eq('organization_id', organizationId).in('status', ['open', 'in_progress']).order('priority', { ascending: false }).order('sequence_number', { ascending: true, nullsFirst: false }).limit(50),
+        supabase.from('events').select('id,name,starts_at,ends_at,location_name,status').eq('organization_id', organizationId).gte('starts_at', start.toISOString()).lt('starts_at', end.toISOString()).order('starts_at').limit(20),
+        supabase.from('follow_ups').select('id,title,due_at,priority,status,person_id,household_id').eq('organization_id', organizationId).neq('status', 'completed').order('due_at', { ascending: true, nullsFirst: false }).limit(20),
+        supabase.from('needs').select('id,title,urgency,status,person_id,household_id,created_at').eq('organization_id', organizationId).in('status', ['open', 'in_progress']).order('urgency').order('created_at', { ascending: false }).limit(20),
+      ])
+      if (assignmentResult.error || eventResult.error || followResult.error || needResult.error) throw assignmentResult.error || eventResult.error || followResult.error || needResult.error
+      setAssignments((assignmentResult.data ?? []) as Record<string, unknown>[]); setEvents((eventResult.data ?? []) as Record<string, unknown>[]); setFollowUps((followResult.data ?? []) as Record<string, unknown>[]); setNeeds((needResult.data ?? []) as Record<string, unknown>[])
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load today command center.') } finally { setLoading(false) }
+  }
+  useEffect(() => { void load() }, [organizationId])
+  const progress = useMemo(() => getAssignmentProgress(assignments as { status: string }[]), [assignments])
+  const overdue = followUps.filter(item => item.due_at && new Date(String(item.due_at)).getTime() < Date.now()).length
+  const urgentNeeds = needs.filter(item => ['urgent', 'critical', 'high'].includes(String(item.urgency).toLowerCase())).length
+  return <div className="today-command-center"><header className="today-heading"><div><span className="rw-eyebrow">TODAY</span><h1>Command Center</h1><p>See what needs attention now, what is happening today, and where your teams are in the work.</p></div><button className="rw-icon-button" onClick={() => void load()} aria-label="Refresh today command center"><RefreshCw size={18}/></button></header>{error && <div className="rw-context-alert" role="alert">{error}</div>}<div className="today-metrics"><article><CheckCircle2 size={18}/><strong>{progress.completed}</strong><span>Complete</span></article><article><Clock3 size={18}/><strong>{progress.active}</strong><span>In progress</span></article><article><AlertCircle size={18}/><strong>{overdue}</strong><span>Overdue follow-ups</span></article><article><AlertCircle size={18}/><strong>{urgentNeeds}</strong><span>Priority needs</span></article></div><div className="today-grid"><section className="today-panel today-work"><div className="today-panel-heading"><div><span className="rw-eyebrow">FIELD WORK</span><h2>Assignments in motion</h2></div><button className="rw-secondary-button" onClick={onOpenMission}>Open Mission Mode</button></div>{loading ? <div className="rw-empty-state">Loading assignments…</div> : !assignments.length ? <div className="rw-empty-state">No open field assignments right now.</div> : <div className="today-list">{assignments.slice(0, 8).map(item => <article key={String(item.id)} className="today-row"><div className="today-icon"><MapPin size={17}/></div><div><strong>{String(item.title)}</strong><small>{String(item.address_label || 'No address')} · Priority {String(item.priority ?? 0)}</small></div><span className={`today-status ${String(item.status)}`}>{String(item.status).replace('_', ' ')}</span></article>)}</div>}</section><section className="today-panel"><div className="today-panel-heading"><div><span className="rw-eyebrow">SCHEDULE</span><h2>Today's events</h2></div><CalendarDays size={20}/></div>{events.length ? events.map(event => <article className="today-row" key={String(event.id)}><div className="today-icon"><CalendarDays size={17}/></div><div><strong>{String(event.name)}</strong><small>{new Date(String(event.starts_at)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}{event.location_name ? ` · ${String(event.location_name)}` : ''}</small></div>{onOpenSignIn && <button className="today-link" onClick={() => onOpenSignIn(String(event.id))}>Sign in</button>}</article>) : <div className="rw-empty-state">No events scheduled today.</div>}</section><section className="today-panel"><div className="today-panel-heading"><div><span className="rw-eyebrow">RELATIONSHIP CARE</span><h2>Next follow-ups</h2></div><Users size={20}/></div>{followUps.slice(0, 6).map(item => <article className="today-row" key={String(item.id)}><div className="today-icon"><Clock3 size={17}/></div><div><strong>{String(item.title)}</strong><small>{item.due_at ? new Date(String(item.due_at)).toLocaleDateString() : 'No due date'} · {String(item.priority)}</small></div></article>)}{!followUps.length && <div className="rw-empty-state">No open follow-ups.</div>}</section></div></div>
+}
