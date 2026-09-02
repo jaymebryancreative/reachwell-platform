@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Check, CheckCheck, UserPlus, Users, X } from 'lucide-react'
-import { ABSENCE_REASONS, isCustomAbsenceReason } from '../../lib/attendanceWorkflow'
+import { ABSENCE_REASONS } from '../../lib/attendanceWorkflow'
 import { addPersonToEvent, createPerson, listEvents, listPeople, listTeams, updateAttendance, type EventParticipantRecord, type EventRecord, type PersonRecord, type TeamRecord } from '../../lib/reachwellApi'
 import { useReachWellContext } from '../../lib/reachwellContext'
 import { supabase } from '../../lib/supabaseClient'
