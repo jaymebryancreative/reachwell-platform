@@ -11,6 +11,7 @@ import { TeamProgressWorkspace } from '../features/progress/TeamProgressWorkspac
 import { ActivityWorkspace } from '../features/activity/ActivityWorkspace'
 import { OperationsHub } from '../features/operations/OperationsHub'
 import { RelationshipHealthWorkspace } from '../features/relationships/RelationshipHealthWorkspace'
+import { RelationshipTimelineWorkspace } from '../features/relationships/RelationshipTimelineWorkspace'
 import { GlobalSearchWorkspace } from '../features/search/GlobalSearchWorkspace'
 import { AuditConsole } from '../features/admin/AuditConsole'
 import { MoneyTrailWorkspace } from '../features/finance/MoneyTrailWorkspace'
