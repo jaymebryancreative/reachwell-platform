@@ -22,11 +22,12 @@ describe('relationship normalization', () => {
   it('normalizes event participants whether Supabase returns one person or an array', () => {
     const records = normalizeEventParticipants([{
       id: 'participant-1', event_id: 'event-1', person_id: 'person-1', user_id: null, team_id: null,
-      role: 'volunteer', attendance_status: 'present', checked_in_at: '2026-09-01T12:00:00.000Z',
+      role: 'volunteer', attendance_status: 'present', absence_reason: null, checked_in_at: '2026-09-01T12:00:00.000Z',
       person: [{ id: 'person-1', first_name: 'Ada', last_name: 'Lovelace', preferred_name: null }],
     }])
     expect(records[0].person?.first_name).toBe('Ada')
     expect(records[0].attendance_status).toBe('present')
+    expect(records[0].absence_reason).toBeNull()
   })
 })
 
