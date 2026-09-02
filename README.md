@@ -2,47 +2,69 @@
 
 **Field Operations & Community Impact Platform**
 
-ReachWell helps organizations manage teams, coordinate outreach, run Mission Mode, track assignments, record needs, manage follow-ups, track volunteer activity, and measure community impact.
+ReachWell helps organizations manage people, teams, events, outreach assignments, Mission Mode, needs, prayer, follow-ups, communication, notifications, audit history, and financial accountability in one connected workspace.
 
 ## Current Implementation Status
 
 ### Backend
 
-The Supabase/PostgreSQL foundation is already implemented, including:
+The live Supabase/PostgreSQL foundation is implemented across the core operational domains, including:
 
-- Organizations, members, and role-based access
-- Teams and team membership
-- Households and people
-- Events and participants
-- Assignments and operational workflow
-- Prayer requests and needs
-- Follow-ups
-- Assignment notes and activity history
-- Notifications and audit logging
-- Row Level Security policies across the application data model
+- Organizations, members, roles, and authenticated organization context
+- People, households, and team memberships
+- Events, person-based participants, and attendance
+- Assignments, objectives, visits, notes, needs, prayer, and follow-ups
+- Durable assignment activity and audit history
+- Field safety alerts and team progress
+- Communication channels, messages, and organization-scoped message search
+- Notifications, notification preferences, and realtime delivery
+- Giving/finance foundations and Money Trail reporting
+- Files, exports, projects/tasks, and continuity foundations
+- Row Level Security across the application data model
 
-See [Backend Status](docs/BACKEND_STATUS.md) and [Backend Architecture](docs/BACKEND_ARCHITECTURE.md) for the current backend inventory.
+The latest live security advisor check reports **zero active security lints**. Performance optimization work is ongoing; remaining advisor warnings are documented rather than hidden.
+
+See `docs/BACKEND_STATUS.md` and `docs/BACKEND_ARCHITECTURE.md` for the deeper inventory.
 
 ### Frontend
 
-The active ReachWell frontend source is not currently present in this repository. The next priority is to recover the current application source and commit it here so the frontend can be connected to the existing backend and tested as one system.
+The active React + TypeScript application is maintained on the `build/backend-finish-line` branch and includes the integrated shell plus People, Teams, Projects, Events, Sign-In Mode, Mission Mode, Follow-Ups, Team Progress, History, Relationship Health, Communication, Communication Search, Resources, Giving & Finance, Money Trail, Administration, Audit Console, and Notifications workspaces.
+
+The production completion standard is intentionally higher than simply rendering a screen: important workflows must persist to Supabase, respect server-side authorization, handle loading/empty/error states, survive reloads, and have automated validation.
+
+## Quality Gate
+
+GitHub Actions runs:
+
+1. `npm ci`
+2. `npm run build`
+3. `npm run lint`
+4. `npm test`
+
+The latest verified quality run completed successfully across all four checks.
 
 ## Technology
 
-- **Frontend:** React + TypeScript
+- **Frontend:** React + TypeScript + Vite
 - **Backend:** Supabase
 - **Database:** PostgreSQL
-- **Hosting:** Cloudflare
+- **Source control:** GitHub
+- **Design / rapid iteration:** Floot
+- **Hosting target:** Vercel/Cloudflare deployment can be reconciled during launch hardening
 
-## Immediate Priorities
+## Active Build Priorities
 
-1. Recover and commit the active ReachWell frontend source.
-2. Connect the application to Supabase using environment variables.
-3. Implement authentication and organization context.
-4. Connect People, Teams, Events, and Mission Mode to the existing backend.
-5. Fix and test Mission Mode interactions, including the Prayer / Need / Complete selection state.
-6. Add automated validation and deployment configuration.
+1. Event Command Center production pass
+2. Sign-In Mode persistence and attendance corrections/reasons
+3. Mission Mode 2.0 and reliability hardening
+4. Live team operations and field safety
+5. Relationship Health and contextual resources
+6. Communication 2.0 and unified search
+7. Finance reporting and Money Trail expansion
+8. Administration and Audit Console 2.0
+9. Automated end-to-end browser testing
+10. Controlled field-test readiness and 1.0 launch hardening
 
 ## Repository Rule
 
-This repository should be the source of truth for ReachWell application code and implementation documentation. Secrets and Supabase service keys must never be committed.
+This repository is the source of truth for ReachWell application code and migration source. Secrets and Supabase service keys must never be committed. Changes applied to the live Supabase project should be mirrored here so a fresh environment can be reproduced safely.
