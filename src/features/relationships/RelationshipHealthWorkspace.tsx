@@ -20,7 +20,7 @@ export function RelationshipHealthWorkspace({ onOpenTimeline }: { onOpenTimeline
       const [needs, prayers, followUps] = await Promise.all([
         supabase.from('needs').select('id,title,description,created_at,person_id,household_id').eq('organization_id', organizationId).in('status', ['open', 'in_progress']).order('created_at', { ascending: false }).limit(12),
         supabase.from('prayer_requests').select('id,request_text,created_at,person_id,household_id').eq('organization_id', organizationId).eq('status', 'open').order('created_at', { ascending: false }).limit(12),
-        supabase.from('follow_ups').select('id,title,description,due_at,person_id,household_id').eq('organization_id', organizationId).neq('status', 'complete').order('due_at', { ascending: true, nullsFirst: false }).limit(12),
+        supabase.from('follow_ups').select('id,title,description,due_at,person_id,household_id').eq('organization_id', organizationId).neq('status', 'completed').order('due_at', { ascending: true, nullsFirst: false }).limit(12),
       ])
       if (needs.error) throw needs.error
       if (prayers.error) throw prayers.error
