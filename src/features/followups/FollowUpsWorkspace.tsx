@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Check, Clock3, Plus, RotateCcw } from 'lucide-react'
-import { completeFollowUp, createFollowUp, listFollowUps, type FollowUpRecord } from '../../lib/reachwellApi'
+import { completeFollowUp, listFollowUps } from '../../lib/followUpApi'
+import { createFollowUp, type FollowUpRecord } from '../../lib/reachwellApi'
 import { useReachWellContext } from '../../lib/reachwellContext'
 import './followups.css'
 
