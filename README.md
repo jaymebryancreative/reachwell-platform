@@ -24,6 +24,8 @@ The live Supabase/PostgreSQL foundation is implemented across the core operation
 
 The latest live security advisor check reports **zero active security lints**. Performance optimization work is ongoing; remaining advisor warnings are documented rather than hidden.
 
+Recent field-operations hardening also adds a single-active-visit guard, assignment status synchronization when a visit starts, and realtime publication for assignments, visits, safety alerts, and event attendance.
+
 See `docs/BACKEND_STATUS.md` and `docs/BACKEND_ARCHITECTURE.md` for the deeper inventory.
 
 ### Frontend
@@ -31,6 +33,8 @@ See `docs/BACKEND_STATUS.md` and `docs/BACKEND_ARCHITECTURE.md` for the deeper i
 The active React + TypeScript application is maintained on the `build/backend-finish-line` branch and includes the integrated shell plus People, Teams, Projects, Events, Sign-In Mode, Mission Mode, Follow-Ups, Team Progress, History, Relationship Health, Communication, Communication Search, Resources, Giving & Finance, Money Trail, Administration, Audit Console, and Notifications workspaces.
 
 The production completion standard is intentionally higher than simply rendering a screen: important workflows must persist to Supabase, respect server-side authorization, handle loading/empty/error states, survive reloads, and have automated validation.
+
+The current field-work pass includes Sign-In attendance reasons and bulk marking, realtime Team Progress, and realtime Mission Mode assignment/safety updates.
 
 ## Quality Gate
 
@@ -41,7 +45,7 @@ GitHub Actions runs:
 3. `npm run lint`
 4. `npm test`
 
-The latest verified quality run completed successfully across all four checks.
+The latest previously verified quality run completed successfully across all four checks. The newest field-operations commits are awaiting their own CI/Vercel verification.
 
 ## Technology
 
