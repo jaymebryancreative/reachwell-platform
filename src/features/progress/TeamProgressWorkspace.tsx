@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Activity, RefreshCw } from 'lucide-react'
 import { listTeamProgress, type TeamProgressRecord } from '../../lib/reachwellApi'
 import { useReachWellContext } from '../../lib/reachwellContext'
+import { supabase } from '../../lib/supabaseClient'
 
 export function TeamProgressWorkspace() {
   const { organizationId } = useReachWellContext()
@@ -11,6 +12,11 @@ export function TeamProgressWorkspace() {
 
   const load = async () => { if (!organizationId) return; setLoading(true); try { setAssignments(await listTeamProgress(organizationId)); setError(null) } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load team progress.') } finally { setLoading(false) } }
   useEffect(() => { void load() }, [organizationId])
+  useEffect(() => {
+    if (!organizationId) return
+    const channel = supabase.channel(`team-progress-${organizationId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'assignments', filter: `organization_id=eq.${organizationId}` }, () => void load()).subscribe()
+    return () => { void supabase.removeChannel(channel) }
+  }, [organizationId])
 
   const groups = useMemo(() => {
     const map = new Map<string, { name: string; total: number; complete: number; active: number }>()
