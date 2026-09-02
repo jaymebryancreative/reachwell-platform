@@ -24,7 +24,15 @@ export function MissionMode() {
   const load = async () => {
     if (!organizationId || !user) { setAssignments([]); setMissionState(createMissionModeState()); return }
     setLoading(true); setError(null)
-    try { const next = await listAssignments(organizationId, user.id); setAssignments(next); setMissionState(state => state.enabled ? selectMissionAssignment(state, state.selectedAssignmentId ?? next[0]?.id ?? '') : state) }
+    try {
+      const next = await listAssignments(organizationId, user.id)
+      setAssignments(next)
+      setMissionState(state => {
+        if (!state.enabled) return state
+        if (state.selectedAssignmentId && next.some(item => item.id === state.selectedAssignmentId)) return state
+        return selectMissionAssignment(state, next[0]?.id ?? '')
+      })
+    }
     catch (err) { setError(err instanceof Error ? err.message : 'Unable to load your mission assignments.') } finally { setLoading(false) }
   }
   useEffect(() => { void load() }, [organizationId, user?.id, contextLoading])
