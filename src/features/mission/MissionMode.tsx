@@ -1,103 +1,63 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Check, CircleAlert, MapPin, MessageSquare, Moon, Play, SquareCheckBig, X, CalendarPlus, ShieldAlert } from 'lucide-react'
+import { completeAssignmentObjective, createFollowUp, createNeed, createPrayerRequest, finishAssignmentVisit, listAssignmentObjectives, listAssignments, saveAssignmentNote, startAssignmentVisit, updateAssignmentStatus, type AssignmentObjective, type AssignmentRecord, type AssignmentVisit } from '../../lib/reachwellApi'
+import { useReachWellContext } from '../../lib/reachwellContext'
+import { supabase } from '../../lib/supabaseClient'
+import { createMissionModeState, enterMissionMode, exitMissionMode, selectMissionAssignment } from '../../lib/fieldWorkflow'
 
-type Assignment = { id: string; label: string; completed?: boolean }
-type Action = 'note' | 'need' | 'prayer' | 'complete' | null
-
-const demoAssignments: Assignment[] = [
-  { id: 'oak-101', label: '101 Oak Street' },
-  { id: 'oak-103', label: '103 Oak Street' },
-  { id: 'oak-105', label: '105 Oak Street' }
-]
+type Action = 'note' | 'need' | 'prayer' | 'followup' | 'backup' | null
 
 export function MissionMode() {
-  const [assignments, setAssignments] = useState<Assignment[]>(demoAssignments)
-  const [currentId, setCurrentId] = useState<string>(demoAssignments[0].id)
-  const [activeAction, setActiveAction] = useState<Action>('note')
-  const [note, setNote] = useState('')
+  const { organizationId, user, loading: contextLoading } = useReachWellContext()
+  const [missionState, setMissionState] = useState(createMissionModeState)
+  const [assignments, setAssignments] = useState<AssignmentRecord[]>([])
+  const [objectives, setObjectives] = useState<AssignmentObjective[]>([])
+  const [activeAction, setActiveAction] = useState<Action>(null)
+  const [note, setNote] = useState(''); const [need, setNeed] = useState(''); const [prayer, setPrayer] = useState('')
+  const [followUpTitle, setFollowUpTitle] = useState(''); const [followUpDescription, setFollowUpDescription] = useState(''); const [followUpDue, setFollowUpDue] = useState('')
+  const [visit, setVisit] = useState<AssignmentVisit | null>(null); const [outcome, setOutcome] = useState(''); const [summary, setSummary] = useState('')
+  const [backupOpen, setBackupOpen] = useState(false); const [backupType, setBackupType] = useState<'backup' | 'unsafe' | 'medical' | 'conflict' | 'other'>('backup'); const [backupMessage, setBackupMessage] = useState('')
+  const [loading, setLoading] = useState(false); const [message, setMessage] = useState<string | null>(null); const [error, setError] = useState<string | null>(null)
+  const enabled = missionState.enabled
+  const current = assignments.find(a => a.id === missionState.selectedAssignmentId) ?? assignments[0]
 
-  const currentIndex = assignments.findIndex((assignment) => assignment.id === currentId)
-  const current = assignments[currentIndex] ?? assignments[0]
-  const nextOpenAssignment = useMemo(
-    () => assignments.find((assignment) => !assignment.completed && assignment.id !== current.id),
-    [assignments, current.id]
-  )
-
-  function selectAssignment(id: string) {
-    setCurrentId(id)
-    setActiveAction(null)
+  const load = async () => {
+    if (!organizationId || !user) { setAssignments([]); setMissionState(createMissionModeState()); return }
+    setLoading(true); setError(null)
+    try {
+      const next = await listAssignments(organizationId, user.id)
+      setAssignments(next)
+      setMissionState(state => {
+        if (!state.enabled) return state
+        if (state.selectedAssignmentId && next.some(item => item.id === state.selectedAssignmentId)) return state
+        return next[0] ? selectMissionAssignment(state, next[0].id) : exitMissionMode()
+      })
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load your mission assignments.') } finally { setLoading(false) }
   }
+  useEffect(() => { void load() }, [organizationId, user?.id, contextLoading])
+  useEffect(() => { if (!organizationId) return; const channel = supabase.channel(`mission-operations-${organizationId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'assignments', filter: `organization_id=eq.${organizationId}` }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'assignment_safety_alerts', filter: `organization_id=eq.${organizationId}` }, payload => { if (payload.eventType === 'INSERT') setMessage('A field safety alert was reported to the organization.') }).subscribe(); return () => { void supabase.removeChannel(channel) } }, [organizationId, user?.id])
+  useEffect(() => { if (!missionState.selectedAssignmentId) { setObjectives([]); return }; void listAssignmentObjectives(missionState.selectedAssignmentId).then(setObjectives).catch(err => setError(err instanceof Error ? err.message : 'Unable to load objectives.')) }, [missionState.selectedAssignmentId])
 
-  function selectAction(action: Exclude<Action, null>) {
-    if (action === 'complete') {
-      completeCurrent()
-      return
-    }
-    setActiveAction((active) => (active === action ? null : action))
-  }
+  const setEnabled = (next: boolean) => { setMissionState(next ? enterMissionMode() : exitMissionMode()); setActiveAction(null); setVisit(null); setObjectives([]); setOutcome(''); setSummary(''); setMessage(null); setError(null) }
+  const setAction = (action: Action) => { setActiveAction(active => active === action ? null : action); setMessage(null); setError(null) }
+  const complete = async () => { if (!current || !organizationId || !user) return; try { await updateAssignmentStatus(current.id, 'completed', user.id, summary || undefined); setAssignments(items => items.filter(item => item.id !== current.id)); setMissionState(state => state.enabled ? { ...state, selectedAssignmentId: null } : createMissionModeState()); setActiveAction(null); setVisit(null); setMessage('Assignment completed and recorded in history.') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to complete assignment.') } }
+  const saveNote = async () => { if (!current || !organizationId || !user || !note.trim()) return; try { await saveAssignmentNote(current.id, organizationId, user.id, note.trim()); setNote(''); setMessage('Note saved to this assignment.') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to save note.') } }
+  const saveNeed = async () => { if (!current || !organizationId || !user || !need.trim()) return; try { await createNeed(current.id, organizationId, user.id, need.trim(), need.trim()); setNeed(''); setMessage('Need recorded for follow-up.') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to record need.') } }
+  const savePrayer = async () => { if (!current || !organizationId || !user || !prayer.trim()) return; try { await createPrayerRequest(current.id, organizationId, user.id, prayer.trim()); setPrayer(''); setMessage('Prayer request recorded.') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to record prayer request.') } }
+  const saveFollowUp = async () => { if (!current || !organizationId || !user || !followUpTitle.trim()) return; try { await createFollowUp({ organization_id: organizationId, assignment_id: current.id, person_id: current.person_id, household_id: current.household_id, title: followUpTitle.trim(), description: followUpDescription.trim() || null, due_at: followUpDue ? new Date(followUpDue).toISOString() : null, priority: 'normal' }); setFollowUpTitle(''); setFollowUpDescription(''); setFollowUpDue(''); setMessage('Follow-up created and linked to this assignment.'); setActiveAction(null) } catch (err) { setError(err instanceof Error ? err.message : 'Unable to create follow-up.') } }
+  const toggleObjective = async (objective: AssignmentObjective) => { if (!user || objective.status === 'complete') return; try { const updated = await completeAssignmentObjective(objective.id, user.id); setObjectives(items => items.map(item => item.id === updated.id ? updated : item)); setMessage('Objective completed.') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to update objective.') } }
+  const beginVisit = async () => { if (!current || !organizationId || !user) return; try { const next = await startAssignmentVisit({ organization_id: organizationId, assignment_id: current.id, person_id: current.person_id, household_id: current.household_id, created_by: user.id }); setVisit(next); await updateAssignmentStatus(current.id, 'in_progress', user.id); setAssignments(items => items.map(item => item.id === current.id ? { ...item, status: 'in_progress', started_at: next.started_at } : item)); setOutcome(''); setSummary(''); setMessage('Visit started.') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to start visit.') } }
+  const finishVisit = async () => { if (!visit || !outcome.trim()) return; try { const done = await finishAssignmentVisit(visit.id, outcome.trim(), summary.trim()); setVisit(done); setMessage('Visit outcome saved. Add a follow-up if another step is needed.') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to save visit outcome.') } }
+  const requestBackup = async () => { if (!current || !organizationId || !user) return; try { const { error: insertError } = await supabase.from('assignment_safety_alerts').insert({ organization_id: organizationId, assignment_id: current.id, reporter_id: user.id, alert_type: backupType, message: backupMessage.trim() || null }); if (insertError) throw insertError; setBackupMessage(''); setBackupOpen(false); setActiveAction(null); setMessage('Back Up request sent to the organization team.') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to send Back Up request.') } }
 
-  function completeCurrent() {
-    setAssignments((items) =>
-      items.map((assignment) =>
-        assignment.id === current.id ? { ...assignment, completed: true } : assignment
-      )
-    )
-    setActiveAction('complete')
-
-    if (nextOpenAssignment) {
-      setCurrentId(nextOpenAssignment.id)
-    }
-  }
-
-  return (
-    <main className="mission-shell">
-      <header className="mission-header">
-        <div><span className="brand">REACHWELL</span><strong>MISSION MODE</strong></div>
-        <span className="live-dot">Live</span>
-      </header>
-
-      <section className="mission-card">
-        <p className="eyebrow">CURRENT HOME / ASSIGNMENT</p>
-        <h1>{current.label}{current.completed ? ' ✓' : ''}</h1>
-        <div className="assignment-list" aria-label="Assignments">
-          {assignments.map((assignment) => (
-            <button
-              key={assignment.id}
-              type="button"
-              className={assignment.id === currentId ? 'assignment selected' : 'assignment'}
-              onClick={() => selectAssignment(assignment.id)}
-            >
-              {assignment.label}{assignment.completed ? ' ✓' : ''}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="mission-card">
-        <div className="action-row" aria-label="Mission actions">
-          {(['note', 'need', 'prayer', 'complete'] as const).map((action) => (
-            <button
-              key={action}
-              type="button"
-              aria-pressed={activeAction === action}
-              className={activeAction === action ? 'action selected' : 'action'}
-              onClick={() => selectAction(action)}
-            >
-              {action}
-            </button>
-          ))}
-        </div>
-
-        {activeAction === 'note' && (
-          <textarea
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Add or update your note. Notes remain editable after saving."
-          />
-        )}
-        {activeAction === 'need' && <p>Record a need for follow-up.</p>}
-        {activeAction === 'prayer' && <p>Record a prayer request with the appropriate privacy level.</p>}
-        {activeAction === 'complete' && <p>Assignment marked complete. Backend sync comes next.</p>}
-      </section>
-    </main>
-  )
+  return <main className={enabled ? 'mission-shell is-live' : 'mission-shell'}>
+    <header className="mission-header"><div><span className="brand">REACHWELL</span><strong>MISSION MODE</strong></div><div className="mission-toggle"><span>{enabled ? 'On' : 'Off'}</span><button type="button" role="switch" aria-checked={enabled} className={enabled ? 'is-on' : ''} onClick={() => setEnabled(!enabled)}><span/></button></div></header>
+    {!enabled ? <section className="mission-off-card"><span className="eyebrow">FIELD WORK</span><h1>Mission Mode is off.</h1><p>Turn it on when you are ready to work the assignments assigned to you or your teams.</p><button type="button" className="mission-primary" onClick={() => setEnabled(true)}><Play size={17}/> Start Mission Mode</button></section> : <>
+      <section className="mission-card mission-assignment-card"><div className="mission-card-top"><div><p className="eyebrow">CURRENT HOME / ASSIGNMENT</p><h1>{current?.address_label || current?.title || 'No assignment selected'}</h1><p>{current?.title || 'Your live assignments will appear here.'}</p></div>{current && !visit && <button className="mission-primary" onClick={() => void beginVisit()}><MapPin size={17}/> Start visit</button>}</div><div className="assignment-list" aria-label="Assignments">{loading && <div className="mission-muted">Loading assignments…</div>}{!loading && !current && <div className="mission-muted">No open assignments are currently assigned to you or your teams.</div>}{assignments.map(assignment => <button key={assignment.id} type="button" className={assignment.id === current?.id ? 'assignment selected' : 'assignment'} onClick={() => setMissionState(state => selectMissionAssignment(state, assignment.id))}><span>{assignment.address_label || assignment.title}</span>{assignment.status === 'in_progress' && <small>In progress</small>}</button>)}</div></section>
+      {current && <section className="mission-card"><div className="action-row" aria-label="Mission actions"><button type="button" className={activeAction === 'note' ? 'action selected' : 'action'} aria-pressed={activeAction === 'note'} onClick={() => setAction('note')}><MessageSquare size={16}/> Note</button><button type="button" className={activeAction === 'need' ? 'action selected' : 'action'} aria-pressed={activeAction === 'need'} onClick={() => setAction('need')}><CircleAlert size={16}/> Need</button><button type="button" className={activeAction === 'prayer' ? 'action selected' : 'action'} aria-pressed={activeAction === 'prayer'} onClick={() => setAction('prayer')}><Moon size={16}/> Prayer</button><button type="button" className={activeAction === 'followup' ? 'action selected' : 'action'} aria-pressed={activeAction === 'followup'} onClick={() => setAction('followup')}><CalendarPlus size={16}/> Follow-up</button><button type="button" className={activeAction === 'backup' ? 'action selected' : 'action'} aria-pressed={activeAction === 'backup'} onClick={() => { setBackupOpen(true); setActiveAction('backup'); setMessage(null); setError(null) }}><ShieldAlert size={16}/> Back Up</button><button type="button" className="action complete" onClick={() => void complete()}><SquareCheckBig size={16}/> Complete</button></div>{activeAction === 'note' && <div className="mission-input"><textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Add a note from this visit…"/><button className="mission-secondary" onClick={() => void saveNote()} disabled={!note.trim()}>Save note</button></div>}{activeAction === 'need' && <div className="mission-input"><textarea value={need} onChange={e => setNeed(e.target.value)} placeholder="What need should the team follow up on?"/><button className="mission-secondary" onClick={() => void saveNeed()} disabled={!need.trim()}>Record need</button></div>}{activeAction === 'prayer' && <div className="mission-input"><textarea value={prayer} onChange={e => setPrayer(e.target.value)} placeholder="What should we be praying for?"/><button className="mission-secondary" onClick={() => void savePrayer()} disabled={!prayer.trim()}>Save prayer</button></div>}{activeAction === 'followup' && <div className="mission-input"><input value={followUpTitle} onChange={e => setFollowUpTitle(e.target.value)} placeholder="What needs to happen next?"/><textarea value={followUpDescription} onChange={e => setFollowUpDescription(e.target.value)} placeholder="Give the next person enough context to act."/><label className="mission-label">Due date<input type="datetime-local" value={followUpDue} onChange={e => setFollowUpDue(e.target.value)}/></label><button className="mission-secondary" onClick={() => void saveFollowUp()} disabled={!followUpTitle.trim()}>Create follow-up</button></div>}{activeAction === 'backup' && backupOpen && <div className="mission-input"><p className="eyebrow">FIELD SAFETY</p><strong>Tell the team what is happening.</strong><div className="mission-backup-options">{([['backup','Need backup'],['unsafe','Unsafe situation'],['medical','Medical concern'],['conflict','Conflict'],['other','Other']] as const).map(([value,label]) => <button type="button" key={value} className={backupType === value ? 'action selected' : 'action'} onClick={() => setBackupType(value)}>{label}</button>)}</div><textarea value={backupMessage} onChange={e => setBackupMessage(e.target.value)} placeholder="Optional context for the team…"/><div className="mission-modal-actions"><button className="mission-secondary" onClick={() => { setBackupOpen(false); setActiveAction(null) }}>Cancel</button><button className="mission-primary" onClick={() => void requestBackup()}>Send Back Up</button></div></div>}</section>}
+      {current && <section className="mission-card"><div className="mission-section-heading"><div><p className="eyebrow">OBJECTIVES</p><h2>What needs to happen here?</h2></div><span>{objectives.filter(o => o.status === 'complete').length}/{objectives.length}</span></div>{objectives.length ? objectives.map(objective => <button key={objective.id} className={objective.status === 'complete' ? 'mission-objective is-complete' : 'mission-objective'} onClick={() => void toggleObjective(objective)}><span className="objective-box">{objective.status === 'complete' && <Check size={15}/>}</span><span>{objective.title}</span></button>) : <p className="mission-muted">No objectives have been assigned yet.</p>}</section>}
+      {visit && !visit.ended_at && <section className="mission-card"><div className="mission-section-heading"><div><p className="eyebrow">VISIT OUTCOME</p><h2>Close the visit</h2></div><button className="mission-icon-button" onClick={() => setVisit(null)} aria-label="Close visit panel"><X size={18}/></button></div><label className="mission-label">Outcome<input value={outcome} onChange={e => setOutcome(e.target.value)} placeholder="Connected · No answer · Follow-up needed"/></label><label className="mission-label">Summary<textarea value={summary} onChange={e => setSummary(e.target.value)} placeholder="What happened? What should the team know?"/></label><button className="mission-primary" onClick={() => void finishVisit()} disabled={!outcome.trim()}>Save outcome</button></section>}
+      {message && <div className="mission-toast" role="status">{message}</div>}{error && <div className="mission-error" role="alert">{error}</div>}
+    </>}
+  </main>
 }
