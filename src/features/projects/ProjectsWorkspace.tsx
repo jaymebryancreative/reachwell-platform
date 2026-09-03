@@ -1,49 +1,111 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, CheckCircle2, Circle, Clock3, LayoutGrid, List, Plus, Users, X } from 'lucide-react'
+import { createProject, createProjectTask, listProjectEvents, listProjectMembers, listProjectTasks, listProjectTeams, listProjects, removeProjectTeam, addProjectTeam, updateProject, updateProjectTask, type ProjectRecord, type ProjectTaskRecord } from '../../lib/projectApi'
+import { listEvents, listTeams, type EventRecord, type TeamRecord } from '../../lib/reachwellApi'
+import { useReachWellContext } from '../../lib/reachwellContext'
+import './projects.css'
 
-export type WorkStatus = 'not_started' | 'in_progress' | 'waiting' | 'completed'
 type ViewMode = 'list' | 'board'
 type ProjectTab = 'overview' | 'work' | 'team' | 'communication' | 'events' | 'impact'
-
-type Task = { id: string; title: string; status: WorkStatus; assignee?: string; due?: string; team?: string }
-type Project = { id: string; name: string; description: string; progress: number; owner: string; teams: string[]; tasks: Task[] }
-
-const availableTeams = ['Outreach', 'Setup', 'Food Distribution', 'Prayer', 'Communications', 'Care']
-const seedProjects: Project[] = [{ id: 'community-food-drive', name: 'Community Food Drive', description: 'Coordinate people, supplies, communication, budget, and the Saturday distribution event.', progress: 68, owner: 'Project Lead', teams: ['Outreach', 'Setup', 'Food Distribution', 'Prayer'], tasks: [
-  { id: 't1', title: 'Confirm food supplier', status: 'not_started', assignee: 'Project Lead', due: 'Tomorrow', team: 'Food Distribution' },
-  { id: 't2', title: 'Prepare distribution stations', status: 'in_progress', assignee: 'Setup Lead', due: 'Friday', team: 'Setup' },
-  { id: 't3', title: 'Confirm volunteer coverage', status: 'waiting', assignee: 'Outreach Lead', due: 'Thursday', team: 'Outreach' },
-  { id: 't4', title: 'Reserve community center', status: 'completed', assignee: 'Project Lead', team: 'Setup' },
-]}]
-
-const statusMeta: Record<WorkStatus, { label: string; icon: typeof Circle }> = { not_started: { label: 'Not Started', icon: Circle }, in_progress: { label: 'In Progress', icon: Clock3 }, waiting: { label: 'Waiting', icon: Clock3 }, completed: { label: 'Completed', icon: CheckCircle2 } }
-const statusOrder: WorkStatus[] = ['not_started', 'in_progress', 'waiting', 'completed']
+const statusOrder: ProjectTaskRecord['status'][] = ['not_started', 'in_progress', 'waiting', 'completed']
+const statusMeta: Record<ProjectTaskRecord['status'], { label: string; icon: typeof Circle }> = { not_started: { label: 'Not Started', icon: Circle }, in_progress: { label: 'In Progress', icon: Clock3 }, waiting: { label: 'Waiting', icon: Clock3 }, completed: { label: 'Completed', icon: CheckCircle2 } }
 
 export function ProjectsWorkspace() {
-  const [projects, setProjects] = useState(seedProjects)
-  const [selectedId, setSelectedId] = useState(seedProjects[0].id)
-  const [mode, setMode] = useState<ViewMode>('list')
+  const { organizationId, loading: contextLoading } = useReachWellContext()
+  const [projects, setProjects] = useState<ProjectRecord[]>([])
+  const [tasks, setTasks] = useState<ProjectTaskRecord[]>([])
+  const [teams, setTeams] = useState<TeamRecord[]>([])
+  const [events, setEvents] = useState<EventRecord[]>([])
+  const [projectTeams, setProjectTeams] = useState<string[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tab, setTab] = useState<ProjectTab>('overview')
+  const [mode, setMode] = useState<ViewMode>('list')
+  const [showCreate, setShowCreate] = useState(false)
+  const [showTask, setShowTask] = useState(false)
   const [teamPickerOpen, setTeamPickerOpen] = useState(false)
-  const selected = projects.find(project => project.id === selectedId) ?? projects[0]
-  const counts = useMemo(() => Object.fromEntries(statusOrder.map(status => [status, selected.tasks.filter(task => task.status === status).length])), [selected])
-  const moveTask = (taskId: string, status: WorkStatus) => setProjects(current => current.map(project => project.id !== selected.id ? project : { ...project, tasks: project.tasks.map(task => task.id === taskId ? { ...task, status } : task) }))
-  const toggleProjectTeam = (team: string) => setProjects(current => current.map(project => project.id !== selected.id ? project : { ...project, teams: project.teams.includes(team) ? project.teams.filter(item => item !== team) : [...project.teams, team] }))
-  const removeProjectTeam = (team: string) => setProjects(current => current.map(project => project.id !== selected.id ? project : { ...project, teams: project.teams.filter(item => item !== team) }))
-  const completeTask = (taskId: string) => moveTask(taskId, 'completed')
-  const tabs: { id: ProjectTab; label: string }[] = [{ id:'overview',label:'Overview' },{ id:'work',label:'Work' },{ id:'team',label:'Teams' },{ id:'communication',label:'Communication' },{ id:'events',label:'Events' },{ id:'impact',label:'Impact' }]
+  const [draftName, setDraftName] = useState('')
+  const [draftDescription, setDraftDescription] = useState('')
+  const [draftPriority, setDraftPriority] = useState<ProjectRecord['priority']>('normal')
+  const [taskTitle, setTaskTitle] = useState('')
+  const [taskDue, setTaskDue] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const selected = projects.find(project => project.id === selectedId) ?? projects[0] ?? null
+
+  const load = async (preferredId?: string | null) => {
+    if (!organizationId) { setProjects([]); setTasks([]); setTeams([]); setEvents([]); setSelectedId(null); return }
+    setLoading(true); setError(null)
+    try {
+      const [projectRows, teamRows, eventRows] = await Promise.all([listProjects(organizationId), listTeams(organizationId), listEvents(organizationId)])
+      setProjects(projectRows); setTeams(teamRows); setEvents(eventRows)
+      const nextId = preferredId && projectRows.some(p => p.id === preferredId) ? preferredId : (projectRows[0]?.id ?? null)
+      setSelectedId(nextId)
+      if (nextId) await loadProject(nextId, organizationId)
+      else { setTasks([]); setProjectTeams([]) }
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load projects.') }
+    finally { setLoading(false) }
+  }
+
+  const loadProject = async (projectId: string, orgId = organizationId) => {
+    if (!orgId) return
+    const [taskRows, teamRows] = await Promise.all([listProjectTasks(orgId, projectId), listProjectTeams(projectId)])
+    setTasks(taskRows); setProjectTeams(teamRows.map((row: any) => row.team_id as string))
+  }
+
+  useEffect(() => { if (!contextLoading) void load() }, [organizationId, contextLoading])
+
+  const counts = useMemo(() => Object.fromEntries(statusOrder.map(status => [status, tasks.filter(task => task.status === status).length])) as Record<ProjectTaskRecord['status'], number>, [tasks])
+  const progress = tasks.length ? Math.round((counts.completed / tasks.length) * 100) : 0
+  const selectedTeams = teams.filter(team => projectTeams.includes(team.id))
+
+  const selectProject = async (id: string) => { setSelectedId(id); setTab('overview'); try { await loadProject(id) } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load project.') } }
+  const create = async () => {
+    const name = draftName.trim(); if (!name || !organizationId) return
+    try { const created = await createProject({ organization_id: organizationId, name, description: draftDescription.trim() || null, priority: draftPriority, start_date: null, target_date: null }); setDraftName(''); setDraftDescription(''); setDraftPriority('normal'); setShowCreate(false); await load(created.id) }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to create project.') }
+  }
+  const addTask = async () => {
+    const title = taskTitle.trim(); if (!title || !organizationId || !selected) return
+    try { await createProjectTask({ organization_id: organizationId, project_id: selected.id, title, description: null, status: 'not_started', priority: 'normal', due_date: taskDue || null }); setTaskTitle(''); setTaskDue(''); setShowTask(false); await loadProject(selected.id) }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to create task.') }
+  }
+  const moveTask = async (task: ProjectTaskRecord, status: ProjectTaskRecord['status']) => {
+    try { await updateProjectTask(task.id, { status }); setTasks(current => current.map(item => item.id === task.id ? { ...item, status, completed_at: status === 'completed' ? new Date().toISOString() : null } : item)); if (selected) await updateProject(selected.id, { status: status === 'completed' && tasks.length > 0 && tasks.filter(t => t.id !== task.id && t.status === 'completed').length + 1 === tasks.length ? 'completed' : selected.status }) }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to update task.') }
+  }
+  const toggleTeam = async (teamId: string) => {
+    if (!selected) return
+    try { if (projectTeams.includes(teamId)) await removeProjectTeam(selected.id, teamId); else await addProjectTeam(selected.id, teamId); setProjectTeams(current => current.includes(teamId) ? current.filter(id => id !== teamId) : [...current, teamId]) }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to update project teams.') }
+  }
 
   return <div className="rw-projects-workspace">
-    <aside className="rw-project-list" aria-label="Projects"><div className="rw-project-list-header"><div><span className="rw-eyebrow">Connected work</span><h1>Projects</h1></div><button className="rw-icon-button" aria-label="Create project"><Plus size={19}/></button></div>{projects.map(project => <button key={project.id} className={`rw-project-select ${project.id === selected.id ? 'is-selected' : ''}`} onClick={() => setSelectedId(project.id)}><strong>{project.name}</strong><span>{project.progress}% complete · {project.teams.length} teams</span></button>)}</aside>
-    <section className="rw-project-detail"><header className="rw-project-header"><div><span className="rw-eyebrow">Project workspace</span><h1>{selected.name}</h1><p>{selected.description}</p></div><button className="rw-primary-button"><Plus size={18}/> Add task</button></header>
-      <div className="rw-project-metrics"><div className="rw-project-progress"><span>Progress</span><strong>{selected.progress}%</strong><div className="rw-progress-track"><i style={{ width: `${selected.progress}%` }}/></div></div><div><Users size={18}/><span>Teams</span><strong>{selected.teams.length}</strong></div><div><CalendarDays size={18}/><span>Open work</span><strong>{selected.tasks.length - counts.completed}</strong></div></div>
-      <div className="rw-project-tabs">{tabs.map(item => <button key={item.id} className={tab === item.id ? 'is-active' : ''} onClick={() => setTab(item.id)}>{item.label}</button>)}</div>
-      {tab === 'team' ? <ProjectTeams teams={selected.teams} onToggle={toggleProjectTeam} onRemove={removeProjectTeam} open={teamPickerOpen} setOpen={setTeamPickerOpen}/> : <><div className="rw-project-team-strip"><span className="rw-eyebrow">Cross-functional project</span><div className="rw-tag-row">{selected.teams.map(team => <span key={team} className="rw-tag">{team}</span>)}<button className="rw-secondary-button rw-inline-add" onClick={() => setTeamPickerOpen(true)}><Plus size={16}/> Teams</button></div></div>{teamPickerOpen && <TeamPicker teams={selected.teams} onToggle={toggleProjectTeam} onClose={() => setTeamPickerOpen(false)}/>}<div className="rw-work-toolbar"><div><strong>Work</strong><span>Simple, connected responsibilities for this project.</span></div><div className="rw-view-switch"><button className={mode === 'list' ? 'is-active' : ''} onClick={() => setMode('list')}><List size={18}/></button><button className={mode === 'board' ? 'is-active' : ''} onClick={() => setMode('board')}><LayoutGrid size={18}/></button></div></div>{mode === 'list' ? <TaskList tasks={selected.tasks} onComplete={completeTask} onMove={moveTask}/> : <TaskBoard tasks={selected.tasks} onMove={moveTask}/>}</>}
+    <aside className="rw-project-list" aria-label="Projects">
+      <div className="rw-project-list-header"><div><span className="rw-eyebrow">Connected work</span><h1>Projects</h1></div><button className="rw-icon-button" aria-label="Create project" onClick={() => setShowCreate(true)} disabled={!organizationId}><Plus size={19}/></button></div>
+      {loading && <div className="rw-roster-empty">Loading projects…</div>}
+      {!loading && !projects.length && organizationId && <div className="rw-roster-empty">No projects yet. Create the first one.</div>}
+      {projects.map(project => <button key={project.id} className={`rw-project-select ${project.id === selected?.id ? 'is-selected' : ''}`} onClick={() => void selectProject(project.id)}><strong>{project.name}</strong><span>{project.status.replace('_', ' ')} · {project.priority} priority</span></button>)}
+    </aside>
+    <section className="rw-project-detail">
+      {!selected ? <div className="rw-roster-empty">{organizationId ? 'Create a project to begin connected work.' : 'Organization context is required.'}</div> : <>
+        <header className="rw-project-header"><div><span className="rw-eyebrow">Project workspace</span><h1>{selected.name}</h1><p>{selected.description || 'No project description yet.'}</p></div><button className="rw-primary-button" onClick={() => setShowTask(true)}><Plus size={18}/> Add task</button></header>
+        {error && <div className="rw-roster-empty">{error}</div>}
+        <div className="rw-project-metrics"><div className="rw-project-progress"><span>Progress</span><strong>{progress}%</strong><div className="rw-progress-track"><i style={{ width: `${progress}%` }}/></div></div><div><Users size={18}/><span>Teams</span><strong>{selectedTeams.length}</strong></div><div><CalendarDays size={18}/><span>Open work</span><strong>{tasks.length - counts.completed}</strong></div></div>
+        <div className="rw-project-tabs">{(['overview','work','team','communication','events','impact'] as ProjectTab[]).map(item => <button key={item} className={tab === item ? 'is-active' : ''} onClick={() => setTab(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div>
+        {tab === 'team' && <section className="rw-project-team-panel"><div><span className="rw-eyebrow">Shared responsibility</span><h2>Project teams</h2><p>Multiple teams can contribute to one project without changing their organization permissions.</p></div><div className="rw-project-team-list">{selectedTeams.map(team => <div key={team.id}><span className="rw-tag">{team.name}</span><button className="rw-icon-button" onClick={() => void toggleTeam(team.id)} aria-label={`Remove ${team.name}`}><X size={16}/></button></div>)}</div><button className="rw-primary-button" onClick={() => setTeamPickerOpen(true)}><Plus size={18}/> Manage teams</button>{teamPickerOpen && <TeamPicker teams={teams} selected={projectTeams} onToggle={toggleTeam} onClose={() => setTeamPickerOpen(false)}/>}</section>}
+        {tab === 'events' && <ProjectEvents events={events} />}
+        {tab === 'communication' && <div className="rw-roster-empty">Project communication is connected to ReachWell channels. Use the Communication workspace to manage messages and members.</div>}
+        {tab === 'impact' && <div className="rw-roster-empty">Impact metrics are stored against this project and will appear here as they are recorded.</div>}
+        {(tab === 'overview' || tab === 'work') && <><div className="rw-project-team-strip"><span className="rw-eyebrow">Cross-functional project</span><div className="rw-tag-row">{selectedTeams.map(team => <span key={team.id} className="rw-tag">{team.name}</span>)}{!selectedTeams.length && <span className="rw-roster-empty">No teams assigned yet.</span>}<button className="rw-secondary-button rw-inline-add" onClick={() => setTeamPickerOpen(true)}><Plus size={16}/> Teams</button></div></div>{teamPickerOpen && <TeamPicker teams={teams} selected={projectTeams} onToggle={toggleTeam} onClose={() => setTeamPickerOpen(false)}/>}<div className="rw-work-toolbar"><div><strong>Work</strong><span>Persistent responsibilities connected to this project.</span></div><div className="rw-view-switch"><button className={mode === 'list' ? 'is-active' : ''} onClick={() => setMode('list')} aria-label="List view"><List size={18}/></button><button className={mode === 'board' ? 'is-active' : ''} onClick={() => setMode('board')} aria-label="Board view"><LayoutGrid size={18}/></button></div></div>{mode === 'list' ? <TaskList tasks={tasks} onMove={moveTask}/> : <TaskBoard tasks={tasks} onMove={moveTask}/>}</>}
+      </>}
     </section>
+    {showCreate && <div className="rw-modal-backdrop"><div className="rw-modal" role="dialog" aria-modal="true"><span className="rw-eyebrow">Connected work</span><h2>Create project</h2><label>Name<input autoFocus value={draftName} onChange={e => setDraftName(e.target.value)} placeholder="e.g. Community Food Drive" /></label><label>Description<textarea value={draftDescription} onChange={e => setDraftDescription(e.target.value)} placeholder="What does this project accomplish?" /></label><label>Priority<select value={draftPriority} onChange={e => setDraftPriority(e.target.value as ProjectRecord['priority'])}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label><div className="rw-modal-actions"><button className="rw-secondary-button" onClick={() => setShowCreate(false)}>Cancel</button><button className="rw-primary-button" onClick={() => void create()} disabled={!draftName.trim()}>Create project</button></div></div></div>}
+    {showTask && <div className="rw-modal-backdrop"><div className="rw-modal" role="dialog" aria-modal="true"><span className="rw-eyebrow">{selected?.name}</span><h2>Add task</h2><label>Task<input autoFocus value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="What needs to happen?" /></label><label>Due date<input type="date" value={taskDue} onChange={e => setTaskDue(e.target.value)} /></label><div className="rw-modal-actions"><button className="rw-secondary-button" onClick={() => setShowTask(false)}>Cancel</button><button className="rw-primary-button" onClick={() => void addTask()} disabled={!taskTitle.trim()}>Add task</button></div></div></div>}
   </div>
 }
 
-function ProjectTeams({ teams, onToggle, onRemove, open, setOpen }: { teams: string[]; onToggle:(team:string)=>void; onRemove:(team:string)=>void; open:boolean; setOpen:(open:boolean)=>void }) { return <section className="rw-project-team-panel"><div><span className="rw-eyebrow">Shared responsibility</span><h2>Project teams</h2><p>A project can involve multiple teams. Each team keeps its identity while contributing to the same connected initiative.</p></div><div className="rw-project-team-list">{teams.map(team => <div key={team}><span className="rw-tag">{team}</span><button className="rw-icon-button" onClick={() => onRemove(team)} aria-label={`Remove ${team}`}><X size={16}/></button></div>)}</div><button className="rw-primary-button" onClick={() => setOpen(!open)}><Plus size={18}/> Manage teams</button>{open && <TeamPicker teams={teams} onToggle={onToggle} onClose={() => setOpen(false)}/>}</section> }
-function TeamPicker({ teams, onToggle, onClose }: { teams:string[]; onToggle:(team:string)=>void; onClose:()=>void }) { return <div className="rw-modal-backdrop"><div className="rw-modal"><div className="rw-modal-header"><div><span className="rw-eyebrow">Cross-functional collaboration</span><h2>Assign teams</h2><p>Select every team involved in this project. A team can participate without being the sole owner.</p></div><button className="rw-icon-button" onClick={onClose}><X size={18}/></button></div><div className="rw-team-picker-list">{availableTeams.map(team => <label key={team}><input type="checkbox" checked={teams.includes(team)} onChange={() => onToggle(team)}/><span>{team}</span></label>)}</div><div className="rw-modal-actions"><button className="rw-primary-button" onClick={onClose}>Done</button></div></div></div> }
-function TaskList({ tasks, onComplete, onMove }: { tasks: Task[]; onComplete:(id:string)=>void; onMove:(id:string,status:WorkStatus)=>void }) { return <div className="rw-task-list">{tasks.map(task => { const Icon=statusMeta[task.status].icon; return <article className={`rw-task-row status-${task.status}`} key={task.id}><button className="rw-task-check" onClick={() => task.status === 'completed' ? onMove(task.id,'not_started') : onComplete(task.id)}><Icon size={20}/></button><div className="rw-task-main"><strong>{task.title}</strong><span>{task.team && `${task.team} • `}{task.assignee ?? 'Unassigned'}</span></div>{task.due && <span className="rw-task-due">{task.due}</span>}<select value={task.status} onChange={event => onMove(task.id,event.target.value as WorkStatus)}>{statusOrder.map(status => <option key={status} value={status}>{statusMeta[status].label}</option>)}</select></article> })}</div> }
-function TaskBoard({ tasks, onMove }: { tasks:Task[]; onMove:(id:string,status:WorkStatus)=>void }) { return <div className="rw-task-board">{statusOrder.map(status => <section className="rw-board-column" key={status}><header><strong>{statusMeta[status].label}</strong><span>{tasks.filter(task=>task.status===status).length}</span></header>{tasks.filter(task=>task.status===status).map(task => <article className="rw-board-task" key={task.id}><strong>{task.title}</strong><span>{task.team ?? 'No team assigned'}</span><select value={task.status} onChange={event=>onMove(task.id,event.target.value as WorkStatus)}>{statusOrder.map(option=><option key={option} value={option}>{statusMeta[option].label}</option>)}</select></article>)}</section>)}</div> }
+function TeamPicker({ teams, selected, onToggle, onClose }: { teams: TeamRecord[]; selected: string[]; onToggle: (id: string) => void; onClose: () => void }) { return <div className="rw-modal-backdrop"><div className="rw-modal"><div className="rw-modal-header"><div><span className="rw-eyebrow">Cross-functional collaboration</span><h2>Assign teams</h2><p>Select every team involved in this project.</p></div><button className="rw-icon-button" onClick={onClose}><X size={18}/></button></div><div className="rw-team-picker-list">{teams.map(team => <label key={team.id}><input type="checkbox" checked={selected.includes(team.id)} onChange={() => void onToggle(team.id)}/><span>{team.name}</span></label>)}</div><div className="rw-modal-actions"><button className="rw-primary-button" onClick={onClose}>Done</button></div></div></div> }
+function ProjectEvents({ events }: { events: EventRecord[] }) { return <section className="rw-project-team-panel"><div><span className="rw-eyebrow">Connected operations</span><h2>Project events</h2><p>Events are available to connect to projects. The event connection is kept in the shared data model.</p></div>{events.length ? events.slice(0, 8).map(event => <div className="rw-member-row" key={event.id}><span className="rw-member-avatar"><CalendarDays size={18}/></span><div><strong>{event.name}</strong><small>{new Date(event.starts_at).toLocaleString()} · {event.status}</small></div></div>) : <div className="rw-roster-empty">No events are available yet.</div>}</section> }
+function TaskList({ tasks, onMove }: { tasks: ProjectTaskRecord[]; onMove: (task: ProjectTaskRecord, status: ProjectTaskRecord['status']) => void }) { return <div className="rw-task-list">{tasks.length ? tasks.map(task => { const Icon = statusMeta[task.status].icon; return <article className={`rw-task-row status-${task.status}`} key={task.id}><button className="rw-task-check" onClick={() => void onMove(task, task.status === 'completed' ? 'not_started' : 'completed')} aria-label={task.status === 'completed' ? 'Reopen task' : 'Complete task'}><Icon size={20}/></button><div className="rw-task-main"><strong>{task.title}</strong><span>{task.priority} priority</span></div>{task.due_date && <span className="rw-task-due">{task.due_date}</span>}<select value={task.status} onChange={e => void onMove(task, e.target.value as ProjectTaskRecord['status'])}>{statusOrder.map(status => <option key={status} value={status}>{statusMeta[status].label}</option>)}</select></article> }) : <div className="rw-roster-empty">No tasks yet. Add the first responsibility for this project.</div>}</div> }
+function TaskBoard({ tasks, onMove }: { tasks: ProjectTaskRecord[]; onMove: (task: ProjectTaskRecord, status: ProjectTaskRecord['status']) => void }) { return <div className="rw-task-board">{statusOrder.map(status => <section className="rw-board-column" key={status}><header><strong>{statusMeta[status].label}</strong><span>{tasks.filter(task => task.status === status).length}</span></header>{tasks.filter(task => task.status === status).map(task => <article className="rw-board-task" key={task.id}><strong>{task.title}</strong><span>{task.priority} priority</span><select value={task.status} onChange={e => void onMove(task, e.target.value as ProjectTaskRecord['status'])}>{statusOrder.map(option => <option key={option} value={option}>{statusMeta[option].label}</option>)}</select></article>)}</section>)}</div> }
