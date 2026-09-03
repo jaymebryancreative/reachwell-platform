@@ -1,10 +1,10 @@
-import { FormEvent, useState } from 'react'
+import { type FormEvent, type ReactNode, useState } from 'react'
 import { ArrowRight, LockKeyhole, Sparkles } from 'lucide-react'
 import { isSupabaseConfigured, supabase } from '../../lib/supabaseClient'
 import { useReachWellContext } from '../../lib/reachwellContext'
 import './auth.css'
 
-export function AuthGate({ children }: { children: React.ReactNode }) {
+export function AuthGate({ children }: { children: ReactNode }) {
   const { session, loading } = useReachWellContext()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
