@@ -1,17 +1,107 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Check, Clock3, Plus, RotateCcw } from 'lucide-react'
 import { completeFollowUp, listFollowUps } from '../../lib/followUpApi'
-import { createFollowUp, type FollowUpRecord } from '../../lib/reachwellApi'
+import { createFollowUp, listHouseholds, listPeople, type FollowUpRecord, type HouseholdRecord, type PersonRecord } from '../../lib/reachwellApi'
 import { useReachWellContext } from '../../lib/reachwellContext'
 import './followups.css'
 
 export function FollowUpsWorkspace() {
-  const { organizationId, user } = useReachWellContext(); const [items, setItems] = useState<FollowUpRecord[]>([]); const [open, setOpen] = useState(false); const [title, setTitle] = useState(''); const [description, setDescription] = useState(''); const [dueAt, setDueAt] = useState(''); const [priority, setPriority] = useState('normal'); const [filter, setFilter] = useState('all'); const [saving, setSaving] = useState(false); const [message, setMessage] = useState<string | null>(null); const [error, setError] = useState<string | null>(null)
-  const load = async () => { if (!organizationId) return; try { setItems(await listFollowUps(organizationId)); setError(null) } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load follow-ups.') } }
+  const { organizationId, user } = useReachWellContext()
+  const [items, setItems] = useState<FollowUpRecord[]>([])
+  const [people, setPeople] = useState<PersonRecord[]>([])
+  const [households, setHouseholds] = useState<HouseholdRecord[]>([])
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [dueAt, setDueAt] = useState('')
+  const [priority, setPriority] = useState('normal')
+  const [targetType, setTargetType] = useState<'general' | 'person' | 'household'>('general')
+  const [targetId, setTargetId] = useState('')
+  const [filter, setFilter] = useState('all')
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = async () => {
+    if (!organizationId) return
+    try {
+      const [followUps, nextPeople, nextHouseholds] = await Promise.all([
+        listFollowUps(organizationId),
+        listPeople(organizationId),
+        listHouseholds(organizationId),
+      ])
+      setItems(followUps)
+      setPeople(nextPeople)
+      setHouseholds(nextHouseholds)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load follow-ups.')
+    }
+  }
+
   useEffect(() => { void load() }, [organizationId])
-  const filtered = useMemo(() => { const now = Date.now(); return [...items].sort((a,b) => (a.due_at ?? '9999').localeCompare(b.due_at ?? '9999')).filter(item => { if (filter === 'urgent') return item.priority === 'urgent'; if (filter === 'high') return item.priority === 'high'; if (filter === 'overdue') return !!item.due_at && new Date(item.due_at).getTime() < now; if (filter === 'today') return !!item.due_at && new Date(item.due_at).toDateString() === new Date().toDateString(); return true }) }, [items, filter])
+
+  const filtered = useMemo(() => {
+    const now = Date.now()
+    return [...items].sort((a, b) => (a.due_at ?? '9999').localeCompare(b.due_at ?? '9999')).filter(item => {
+      if (filter === 'urgent') return item.priority === 'urgent'
+      if (filter === 'high') return item.priority === 'high'
+      if (filter === 'overdue') return !!item.due_at && new Date(item.due_at).getTime() < now
+      if (filter === 'today') return !!item.due_at && new Date(item.due_at).toDateString() === new Date().toDateString()
+      return true
+    })
+  }, [items, filter])
+
   const overdue = items.filter(item => item.due_at && new Date(item.due_at).getTime() < Date.now()).length
-  const add = async () => { if (!organizationId || !user || !title.trim()) return; setSaving(true); setError(null); try { const item = await createFollowUp({ organization_id: organizationId, title: title.trim(), description: description.trim() || null, due_at: dueAt ? new Date(dueAt).toISOString() : null, priority }); setItems(current => [...current, item]); setTitle(''); setDescription(''); setDueAt(''); setPriority('normal'); setOpen(false); setMessage('Follow-up created.') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to create follow-up.') } finally { setSaving(false) } }
-  const complete = async (id: string) => { if (!user) return; try { await completeFollowUp(id, user.id); setItems(current => current.filter(item => item.id !== id)); setMessage('Follow-up completed.') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to complete follow-up.') } }
-  return <div className="followups-workspace"><div className="followups-hero"><div><span className="rw-eyebrow">RELATIONSHIP CARE</span><h1>Follow-Ups</h1><p>Keep every next step connected to the people and field work that created it.</p></div><button className="rw-primary-button" onClick={() => setOpen(true)}><Plus size={17} /> New follow-up</button></div><div className="followup-stats"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}><Clock3 size={17} /><strong>{items.length}</strong><span>Open</span></button><button className={filter === 'overdue' ? 'active' : ''} onClick={() => setFilter('overdue')}><AlertCircle size={17} /><strong>{overdue}</strong><span>Overdue</span></button><button className={filter === 'urgent' ? 'active' : ''} onClick={() => setFilter('urgent')}><AlertCircle size={17} /><strong>{items.filter(item => item.priority === 'urgent').length}</strong><span>Urgent</span></button><button className={filter === 'today' ? 'active' : ''} onClick={() => setFilter('today')}><Clock3 size={17} /><strong>{items.filter(item => item.due_at && new Date(item.due_at).toDateString() === new Date().toDateString()).length}</strong><span>Due today</span></button></div>{open && <section className="followup-form"><div className="followup-form-heading"><div><span className="rw-eyebrow">NEW FOLLOW-UP</span><h2>What needs to happen next?</h2></div><button className="followup-text-button" onClick={() => setOpen(false)}>Cancel</button></div><label>Title<input value={title} onChange={e => setTitle(e.target.value)} placeholder="Call back about housing support" /></label><label>Description<textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Capture the context the next person needs." /></label><div className="followup-form-grid"><label>Due date<input type="datetime-local" value={dueAt} onChange={e => setDueAt(e.target.value)} /></label><label>Priority<select value={priority} onChange={e => setPriority(e.target.value)}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label></div><button className="rw-primary-button" onClick={() => void add()} disabled={!title.trim() || saving}>{saving ? 'Saving…' : 'Create follow-up'}</button></section>}<section className="followup-list">{filtered.map(item => <article className="followup-row" key={item.id}><div><div className="followup-title-line"><strong>{item.title}</strong><span className={`priority ${item.priority}`}>{item.priority}</span></div>{item.description && <p>{item.description}</p>}<small>{item.due_at ? `Due ${new Date(item.due_at).toLocaleString()}` : 'No due date'} · {item.person_id ? 'Person' : item.household_id ? 'Household' : item.assignment_id ? 'Field assignment' : 'General'}</small></div><button className="followup-complete" onClick={() => void complete(item.id)}><Check size={17} /> Complete</button></article>)}{!filtered.length && <div className="followup-empty"><RotateCcw size={22} /><strong>No follow-ups match this view</strong><span>Try another filter or create the next step.</span></div>}</section>{message && <div className="mission-toast" role="status">{message}</div>}{error && <div className="mission-error" role="alert">{error}</div>}</div>
+
+  const resetForm = () => {
+    setTitle(''); setDescription(''); setDueAt(''); setPriority('normal'); setTargetType('general'); setTargetId('')
+  }
+
+  const add = async () => {
+    if (!organizationId || !user || !title.trim() || (targetType !== 'general' && !targetId)) return
+    setSaving(true); setError(null)
+    try {
+      const item = await createFollowUp({
+        organization_id: organizationId,
+        title: title.trim(),
+        description: description.trim() || null,
+        due_at: dueAt ? new Date(dueAt).toISOString() : null,
+        priority,
+        person_id: targetType === 'person' ? targetId : null,
+        household_id: targetType === 'household' ? targetId : null,
+        assigned_to: user.id,
+      })
+      setItems(current => [...current, item])
+      resetForm(); setOpen(false); setMessage('Follow-up created and connected.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to create follow-up.')
+    } finally { setSaving(false) }
+  }
+
+  const complete = async (id: string) => {
+    if (!user) return
+    try {
+      await completeFollowUp(id, user.id)
+      setItems(current => current.filter(item => item.id !== id))
+      setMessage('Follow-up completed.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to complete follow-up.')
+    }
+  }
+
+  const personLabel = (person: PersonRecord) => `${person.preferred_name || person.first_name} ${person.last_name || ''}`.trim()
+
+  return <div className="followups-workspace">
+    <div className="followups-hero"><div><span className="rw-eyebrow">RELATIONSHIP CARE</span><h1>Follow-Ups</h1><p>Keep every next step connected to the people and field work that created it.</p></div><button className="rw-primary-button" onClick={() => { resetForm(); setOpen(true) }}><Plus size={17} /> New follow-up</button></div>
+    <div className="followup-stats"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}><Clock3 size={17} /><strong>{items.length}</strong><span>Open</span></button><button className={filter === 'overdue' ? 'active' : ''} onClick={() => setFilter('overdue')}><AlertCircle size={17} /><strong>{overdue}</strong><span>Overdue</span></button><button className={filter === 'urgent' ? 'active' : ''} onClick={() => setFilter('urgent')}><AlertCircle size={17} /><strong>{items.filter(item => item.priority === 'urgent').length}</strong><span>Urgent</span></button><button className={filter === 'today' ? 'active' : ''} onClick={() => setFilter('today')}><Clock3 size={17} /><strong>{items.filter(item => item.due_at && new Date(item.due_at).toDateString() === new Date().toDateString()).length}</strong><span>Due today</span></button></div>
+    {open && <section className="followup-form"><div className="followup-form-heading"><div><span className="rw-eyebrow">NEW FOLLOW-UP</span><h2>What needs to happen next?</h2></div><button className="followup-text-button" onClick={() => { resetForm(); setOpen(false) }}>Cancel</button></div>
+      <label>Title<input value={title} onChange={e => setTitle(e.target.value)} placeholder="Call back about housing support" /></label>
+      <label>Description<textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Capture the context the next person needs." /></label>
+      <div className="followup-form-grid"><label>Connected to<select value={targetType} onChange={e => { setTargetType(e.target.value as typeof targetType); setTargetId('') }}><option value="general">General</option><option value="person">Person</option><option value="household">Household</option></select></label>{targetType === 'person' && <label>Person<select value={targetId} onChange={e => setTargetId(e.target.value)}><option value="">Select a person…</option>{people.map(person => <option key={person.id} value={person.id}>{personLabel(person)}</option>)}</select></label>}{targetType === 'household' && <label>Household<select value={targetId} onChange={e => setTargetId(e.target.value)}><option value="">Select a household…</option>{households.map(household => <option key={household.id} value={household.id}>{household.household_name || household.address_line1 || 'Unnamed household'}</option>)}</select></label>}<label>Due date<input type="datetime-local" value={dueAt} onChange={e => setDueAt(e.target.value)} /></label><label>Priority<select value={priority} onChange={e => setPriority(e.target.value)}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label></div>
+      <button className="rw-primary-button" onClick={() => void add()} disabled={!title.trim() || (targetType !== 'general' && !targetId) || saving}>{saving ? 'Saving…' : 'Create follow-up'}</button>
+    </section>}
+    <section className="followup-list">{filtered.map(item => <article className="followup-row" key={item.id}><div><div className="followup-title-line"><strong>{item.title}</strong><span className={`priority ${item.priority}`}>{item.priority}</span></div>{item.description && <p>{item.description}</p>}<small>{item.due_at ? `Due ${new Date(item.due_at).toLocaleString()}` : 'No due date'} · {item.person_id ? 'Person' : item.household_id ? 'Household' : item.assignment_id ? 'Field assignment' : 'General'}</small></div><button className="followup-complete" onClick={() => void complete(item.id)}><Check size={17} /> Complete</button></article>)}{!filtered.length && <div className="followup-empty"><RotateCcw size={22} /><strong>No follow-ups match this view</strong><span>Try another filter or create the next step.</span></div>}</section>
+    {message && <div className="mission-toast" role="status">{message}</div>}{error && <div className="mission-error" role="alert">{error}</div>}
+  </div>
 }
