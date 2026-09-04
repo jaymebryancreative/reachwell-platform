@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MessageCircle, Plus, RefreshCw, Search, Send, Archive } from 'lucide-react'
+import { MessageCircle, Plus, RefreshCw, Search, Send, Archive, CheckCheck, Pencil, Trash2 } from 'lucide-react'
 import { useReachWellContext } from '../../lib/reachwellContext'
 import { supabase } from '../../lib/supabaseClient'
 
@@ -18,6 +18,8 @@ export function CommunicationWorkspace() {
   const [profiles, setProfiles] = useState<Record<string, Profile>>({})
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingBody, setEditingBody] = useState('')
   const [newName, setNewName] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [showCreate, setShowCreate] = useState(false)
@@ -44,6 +46,9 @@ export function CommunicationWorkspace() {
     if (ids.length) {
       const { data: people } = await supabase.from('profiles').select('id,full_name,first_name,last_name,email').in('id', ids)
       setProfiles(current => ({ ...current, ...Object.fromEntries(((people ?? []) as Profile[]).map(profile => [profile.id, profile])) }))
+    }
+    if (user && next.length) {
+      await supabase.from('communication_message_reads').upsert(next.map(message => ({ message_id: message.id, user_id: user.id, read_at: new Date().toISOString() })), { onConflict: 'message_id,user_id' })
     }
   }
 
@@ -74,6 +79,18 @@ export function CommunicationWorkspace() {
     setSending(false)
   }
 
+  const saveEdit = async () => {
+    if (!editingId || !editingBody.trim()) return
+    const { error: editError } = await supabase.from('communication_messages').update({ body: editingBody.trim(), edited_at: new Date().toISOString() }).eq('id', editingId).eq('author_id', user?.id ?? '')
+    if (editError) setError(editError.message); else { setEditingId(null); setEditingBody(''); await loadMessages() }
+  }
+
+  const deleteMessage = async (messageId: string) => {
+    if (!user || !window.confirm('Delete this message?')) return
+    const { error: deleteError } = await supabase.from('communication_messages').update({ deleted_at: new Date().toISOString() }).eq('id', messageId).eq('author_id', user.id)
+    if (deleteError) setError(deleteError.message); else await loadMessages()
+  }
+
   const archiveChannel = async () => {
     if (!selected || !canManage(organizationRole)) return
     if (!window.confirm(`Archive “${selected.name}”?`)) return
@@ -87,7 +104,7 @@ export function CommunicationWorkspace() {
     {showCreate && canManage(organizationRole) && <div className="rw-card" style={{ display: 'grid', gap: 10, marginBottom: 16 }}><input className="rw-input" value={newName} onChange={event => setNewName(event.target.value)} placeholder="Channel name" aria-label="Channel name" /><input className="rw-input" value={newDescription} onChange={event => setNewDescription(event.target.value)} placeholder="Description (optional)" aria-label="Channel description" /><button className="rw-primary-button" onClick={() => void createChannel()} disabled={!newName.trim()}>Create channel</button></div>}
     <div className="communication-layout">
       <aside className="communication-channels"><div className="ops-search"><Search size={16}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search channels and messages" aria-label="Search communication" /></div>{filteredChannels.map(channel => <button key={channel.id} className={channel.id === selectedId ? 'selected' : ''} onClick={() => setSelectedId(channel.id)}><MessageCircle size={16}/><span>{channel.name}<small>{channel.team_id ? 'Team' : channel.event_id ? 'Event' : channel.assignment_id ? 'Mission assignment' : 'Organization'}</small></span></button>)}{!filteredChannels.length && <div className="rw-empty-state">No channels match your search.</div>}</aside>
-      <section className="communication-thread">{selected ? <><div className="communication-thread-head"><div><strong>{selected.name}</strong><small>{selected.description || 'Organization conversation'}</small></div>{canManage(organizationRole) && <button className="rw-secondary-button" onClick={() => void archiveChannel()}><Archive size={15}/> Archive</button>}</div><div className="ops-message-list" aria-live="polite">{filteredMessages.map(item => <article className="ops-message" key={item.id}><strong>{displayProfile(profiles[item.author_id ?? ''])}</strong><p>{item.body}</p><small>{new Date(item.created_at).toLocaleString()}{item.edited_at ? ' · edited' : ''}</small></article>)}{!filteredMessages.length && <div className="rw-empty-state"><h2>No messages yet</h2><p>Start the conversation with this channel.</p></div>}</div><div className="ops-composer"><input value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendMessage() } }} placeholder="Write a message…" aria-label="Message" /><button className="rw-primary-button" onClick={() => void sendMessage()} disabled={!draft.trim() || sending}><Send size={15}/> {sending ? 'Sending…' : 'Send'}</button></div></> : <div className="rw-empty-state"><MessageCircle size={28}/><h2>Select a channel</h2><p>Choose a conversation or create one if you have administration access.</p></div>}</section>
+      <section className="communication-thread">{selected ? <><div className="communication-thread-head"><div><strong>{selected.name}</strong><small>{selected.description || 'Organization conversation'}</small></div>{canManage(organizationRole) && <button className="rw-secondary-button" onClick={() => void archiveChannel()}><Archive size={15}/> Archive</button>}</div><div className="ops-message-list" aria-live="polite">{filteredMessages.map(item => <article className="ops-message" key={item.id}><div style={{ display:'flex', justifyContent:'space-between', gap:12 }}><div><strong>{displayProfile(profiles[item.author_id ?? ''])}</strong><small style={{ display:'block' }}>{new Date(item.created_at).toLocaleString()}{item.edited_at ? ' · edited' : ''} {user && item.author_id === user.id && <CheckCheck size={13} aria-label="Your message" />}</small></div>{user && item.author_id === user.id && <div style={{ display:'flex', gap:4 }}><button className="rw-icon-button" title="Edit message" aria-label="Edit message" onClick={() => { setEditingId(item.id); setEditingBody(item.body) }}><Pencil size={14}/></button><button className="rw-icon-button" title="Delete message" aria-label="Delete message" onClick={() => void deleteMessage(item.id)}><Trash2 size={14}/></button></div>}</div>{editingId === item.id ? <div style={{ display:'flex', gap:8, marginTop:8 }}><input className="rw-input" value={editingBody} onChange={event => setEditingBody(event.target.value)} aria-label="Edit message" /><button className="rw-primary-button" onClick={() => void saveEdit()}>Save</button><button className="rw-secondary-button" onClick={() => setEditingId(null)}>Cancel</button></div> : <p>{item.body}</p>}</article>)}{!filteredMessages.length && <div className="rw-empty-state"><h2>No messages yet</h2><p>Start the conversation with this channel.</p></div>}</div><div className="ops-composer"><input value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendMessage() } }} placeholder="Write a message…" aria-label="Message" /><button className="rw-primary-button" onClick={() => void sendMessage()} disabled={!draft.trim() || sending}><Send size={15}/> {sending ? 'Sending…' : 'Send'}</button></div></> : <div className="rw-empty-state"><MessageCircle size={28}/><h2>Select a channel</h2><p>Choose a conversation or create one if you have administration access.</p></div>}</section>
     </div>
   </div>
 }
