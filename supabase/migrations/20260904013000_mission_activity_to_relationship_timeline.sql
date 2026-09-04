@@ -43,3 +43,5 @@ drop trigger if exists assignment_activity_relationship_timeline on public.assig
 create trigger assignment_activity_relationship_timeline
 after insert on public.assignment_activity
 for each row execute function public.sync_assignment_activity_to_relationship_timeline();
+
+revoke execute on function public.sync_assignment_activity_to_relationship_timeline() from public, anon, authenticated;
