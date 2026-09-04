@@ -7,4 +7,9 @@ grant execute on function public.assign_team_role(uuid, uuid, text) to authentic
 grant execute on function public.create_organization_invitation(uuid, text, text, uuid) to authenticated;
 grant execute on function public.complete_assignment_and_get_next(uuid, text) to authenticated;
 
-revoke execute on function public.create_reachwell_notification(uuid, uuid, text, text, text, jsonb) from anon, authenticated;
+revoke execute on function public.create_reachwell_notification(uuid, uuid, text, text, text, jsonb) from public, anon, authenticated;
+
+-- Trusted notification/audit helpers must resolve only against explicitly qualified objects.
+alter function public.create_reachwell_notification(uuid, uuid, text, text, text, jsonb) set search_path = public;
+alter function public.notify_follow_up_assignment() set search_path = public;
+alter function public.record_reachwell_audit() set search_path = public;
