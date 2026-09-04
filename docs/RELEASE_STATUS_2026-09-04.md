@@ -3,30 +3,25 @@
 ## Current candidate
 - Branch: `build/finish-line-execution-20260903`
 - PR: #3
-- Latest verified source commit: `38ad887cebd941f67f1f19bc0dd2a3a8e4b62353`
 
 ## Verified in this pass
-- Operational notification producers added for channel messages, follow-up assignment, and task assignment.
-- Communication now records message-read state and supports author-only edit/delete controls.
-- Connected Impact Reporting workspace added with organization-scoped live metrics for people, teams, events, attendance, assignments, completion, needs, prayer, and follow-ups.
-- Authorized Data Continuity workspace added for leadership-only export requests/history.
-- Latest source commit passed GitHub ReachWell Quality: build, lint, and tests.
-- Latest source commit has a READY Vercel deployment.
-- Vercel runtime error aggregation reports no runtime errors in the selected one-hour window.
-- Production has RLS enabled across the public operational tables inspected.
-- Production notification producer functions are revoked from direct public/anon/authenticated execution.
+- Giving workspace now exposes an authorized receipt-issuance action for finance-scoped users and calls the server-side `mark_giving_receipt_issued` RPC.
+- Production `mark_giving_receipt_issued` is SECURITY DEFINER with an explicit `search_path=public` and checks `can_manage_finance` against the gift's organization.
+- Production follow-up notification trigger function was verified safe for both INSERT and UPDATE operations without reading `OLD` during INSERT.
+- Follow-up, task-assignment, and communication-message notification producer functions remain revoked from direct public/anon/authenticated execution.
+- Authorized Data Continuity performs a server-side organization export and browser download; export history is recorded with organization scope.
+- Production `export_organization_data` is leadership-authorized and currently includes people, households, teams, events, follow-ups, giving transactions, and financial transactions.
 
-## Explicitly not certified yet
-- Authenticated browser E2E across every 440 acceptance step is not available in this tool session.
-- External email delivery provider is not configured/verified; UI must not claim email delivery.
-- Full external payment/tap-to-pay provider flow is not configured/verified.
-- Full archive export generation/packaging worker is not verified; the continuity workspace currently records authorized export requests rather than falsely claiming a generated archive.
-- Full receipt/tax statement generation and delivery workflow still requires end-to-end verification.
-- AI provider-backed assistance is not certified until a real provider/configuration path is verified.
-- Integration provider configuration/status/error workflows are not fully certified.
-- Some Supabase security-advisor WARNs are intentional SECURITY DEFINER RPC exposure and require function-by-function authorization review rather than blind revocation.
-- Supabase performance advisor reports unused-index INFO findings and multiple-permissive-policy WARN findings; no destructive index cleanup was performed.
+## Still blocked / requires external evidence or provider configuration
+- Authenticated browser E2E across the full acceptance workflow is not available in this tool session.
+- External email delivery provider is not configured/verified.
+- External payment/tap-to-pay provider flow is not configured/verified.
+- A background archive worker for large asynchronous exports is not verified; current continuity export is a synchronous authorized JSON export.
+- Full receipt/tax-document generation and delivery is not certified; authorized receipt issuance is implemented, but document generation/delivery is not yet proven.
+- Provider-backed AI assistance is not configured/verified.
+- Full integration-provider configuration/status/error workflows are not certified.
+- Supabase security/performance advisor findings still require function-by-function review; intentional SECURITY DEFINER workflow RPCs must not be blindly revoked.
 
 ## Release rule
 
-This document is evidence, not a declaration that ReachWell 1.0 is complete. The release gate remains blocked until the explicit items above are implemented or verified, and until the available acceptance evidence supports the corresponding master-plan requirements.
+ReachWell 1.0 must not be represented as fully production-certified until the remaining external-provider and authenticated browser acceptance evidence is available. Implementation work continues on the candidate branch without merging or destructive production changes.
