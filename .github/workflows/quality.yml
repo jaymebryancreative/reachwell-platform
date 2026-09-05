@@ -2,7 +2,7 @@ name: ReachWell Quality
 
 on:
   push:
-    branches: [main, 'build/**', 'rebuild/**', 'reachwell-*']
+    branches: [main, production, 'build/**', 'rebuild/**', 'reachwell-*']
   pull_request:
 
 jobs:
