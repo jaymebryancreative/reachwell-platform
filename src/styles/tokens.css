@@ -1,11 +1,16 @@
 :root {
   --rw-ink: #11131a;
   --rw-panel: #181b25;
+  --rw-canvas: #f7f8fc;
   --rw-surface: #f7f8fc;
   --rw-card: #ffffff;
   --rw-text: #161824;
   --rw-muted: #687086;
-  --rw-border: #e6e8f0;
+  --rw-line: #dfe2eb;
+  --rw-border: #dfe2eb;
+  --rw-violet: #634ff0;
+  --rw-blue: #2c8cff;
+  --rw-teal: #65d9c4;
   --rw-brand-a: #7357ff;
   --rw-brand-b: #2c8cff;
   --rw-brand-c: #65d9c4;
@@ -20,3 +25,17 @@ html { color-scheme: light; }
 body { margin: 0; min-width: 320px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: var(--rw-surface); color: var(--rw-text); }
 button, input, textarea, select { font: inherit; }
 button { min-height: 44px; }
+
+/* Shared controls: every workspace should have a visible, keyboard-accessible control state. */
+input, textarea, select {
+  color: var(--rw-text);
+  background: #fff;
+  border: 1.5px solid var(--rw-line);
+  border-radius: 12px;
+}
+input::placeholder, textarea::placeholder { color: #74798a; opacity: 1; }
+input:focus, textarea:focus, select:focus, button:focus-visible {
+  outline: 3px solid rgba(99, 79, 240, .18);
+  outline-offset: 1px;
+}
+input:disabled, textarea:disabled, select:disabled, button:disabled { cursor: not-allowed; }
