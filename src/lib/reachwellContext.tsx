@@ -2,6 +2,15 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 
+type WorkspaceLookup = {
+  organization_id: string
+  role: string
+  status: string
+  organization_name: string
+  organization_slug: string
+  organization_active: boolean
+}
+
 type OrganizationMembership = {
   organization_id: string
   role: string
@@ -52,7 +61,7 @@ export function ReachWellProvider({ children }: { children: ReactNode }) {
 
     try {
       const { data, error: workspaceError } = await supabase
-        .rpc('current_organization_membership')
+        .rpc<WorkspaceLookup>('current_organization_membership')
         .maybeSingle()
 
       if (workspaceError) throw workspaceError
