@@ -51,36 +51,29 @@ export function ReachWellProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const { data: member, error: memberError } = await supabase
-        .from('organization_members')
-        .select('organization_id, role, status')
-        .eq('user_id', nextSession.user.id)
-        .eq('status', 'active')
-        .order('created_at', { ascending: true })
-        .limit(1)
+      const { data, error: workspaceError } = await supabase
+        .rpc('current_organization_membership')
         .maybeSingle()
 
-      if (memberError) throw memberError
-      if (!member) {
-        if (mountedRef.current && requestId === requestRef.current) {
-          setMembership(null)
-          setError(null)
-        }
+      if (workspaceError) throw workspaceError
+      if (!mountedRef.current || requestId !== requestRef.current) return
+
+      if (!data) {
+        setMembership(null)
+        setError(null)
         return
       }
 
-      const { data: organization, error: organizationError } = await supabase
-        .from('organizations')
-        .select('id, name, slug, active')
-        .eq('id', member.organization_id)
-        .maybeSingle()
-
-      if (organizationError) throw organizationError
-      if (!mountedRef.current || requestId !== requestRef.current) return
-
       setMembership({
-        ...member,
-        organization: organization ?? null,
+        organization_id: data.organization_id,
+        role: data.role,
+        status: data.status,
+        organization: {
+          id: data.organization_id,
+          name: data.organization_name,
+          slug: data.organization_slug,
+          active: data.organization_active,
+        },
       })
       setError(null)
     } catch (workspaceError) {
