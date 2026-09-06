@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 
@@ -17,31 +17,41 @@ type ReachWellContextValue = {
   organizationRole: string | null
   loading: boolean
   error: string | null
+  refreshWorkspace: () => Promise<void>
 }
 
 const ReachWellContext = createContext<ReachWellContextValue | undefined>(undefined)
+
+function readableError(error: unknown) {
+  return error instanceof Error ? error.message : 'ReachWell could not complete that request. Please try again.'
+}
 
 export function ReachWellProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [membership, setMembership] = useState<OrganizationMembership | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const mountedRef = useRef(true)
+  const requestRef = useRef(0)
 
-  useEffect(() => {
-    let mounted = true
+  const loadWorkspace = async (nextSession: Session | null) => {
+    const requestId = ++requestRef.current
 
-    const loadMembership = async (nextSession: Session | null) => {
-      if (!nextSession?.user) {
-        if (mounted) {
-          setMembership(null)
-          setError(null)
-          setLoading(false)
-        }
-        return
+    if (!nextSession?.user) {
+      if (mountedRef.current && requestId === requestRef.current) {
+        setMembership(null)
+        setError(null)
+        setLoading(false)
       }
+      return
+    }
 
+    if (mountedRef.current) {
       setLoading(true)
       setError(null)
+    }
+
+    try {
       const { data, error: membershipError } = await supabase
         .from('organization_members')
         .select('organization_id, role, status, organization:organizations(id, name, slug, active)')
@@ -51,30 +61,53 @@ export function ReachWellProvider({ children }: { children: ReactNode }) {
         .limit(1)
         .maybeSingle()
 
-      if (!mounted) return
+      if (!mountedRef.current || requestId !== requestRef.current) return
+
       if (membershipError) {
         setMembership(null)
         setError(membershipError.message)
       } else {
         setMembership(data as OrganizationMembership | null)
+        setError(null)
       }
+    } catch (workspaceError) {
+      if (!mountedRef.current || requestId !== requestRef.current) return
+      setMembership(null)
+      setError(readableError(workspaceError))
+    } finally {
+      if (mountedRef.current && requestId === requestRef.current) setLoading(false)
+    }
+  }
+
+  const refreshWorkspace = async () => {
+    setLoading(true)
+    try {
+      const { data, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      if (!mountedRef.current) return
+      setSession(data.session)
+      await loadWorkspace(data.session)
+    } catch (sessionError) {
+      if (!mountedRef.current) return
+      setSession(null)
+      setMembership(null)
+      setError(readableError(sessionError))
       setLoading(false)
     }
+  }
 
-    void supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return
-      setSession(data.session)
-      void loadMembership(data.session)
-    })
+  useEffect(() => {
+    mountedRef.current = true
+    void refreshWorkspace()
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      if (!mounted) return
+      if (!mountedRef.current) return
       setSession(nextSession)
-      void loadMembership(nextSession)
+      void loadWorkspace(nextSession)
     })
 
     return () => {
-      mounted = false
+      mountedRef.current = false
       listener.subscription.unsubscribe()
     }
   }, [])
@@ -87,6 +120,7 @@ export function ReachWellProvider({ children }: { children: ReactNode }) {
     organizationRole: membership?.role ?? null,
     loading,
     error,
+    refreshWorkspace,
   }), [session, membership, loading, error])
 
   return <ReachWellContext.Provider value={value}>{children}</ReachWellContext.Provider>
