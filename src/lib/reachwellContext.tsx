@@ -23,7 +23,7 @@ type ReachWellContextValue = {
 const ReachWellContext = createContext<ReachWellContextValue | undefined>(undefined)
 
 function readableError(error: unknown) {
-  return error instanceof Error ? error.message : 'ReachWell could not complete that request. Please try again.'
+  return error instanceof Error && error.message ? error.message : 'ReachWell could not complete that request. Please try again.'
 }
 
 export function ReachWellProvider({ children }: { children: ReactNode }) {
@@ -36,7 +36,6 @@ export function ReachWellProvider({ children }: { children: ReactNode }) {
 
   const loadWorkspace = async (nextSession: Session | null) => {
     const requestId = ++requestRef.current
-
     if (!nextSession?.user) {
       if (mountedRef.current && requestId === requestRef.current) {
         setMembership(null)
@@ -52,24 +51,38 @@ export function ReachWellProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const { data, error: membershipError } = await supabase
+      const { data: member, error: memberError } = await supabase
         .from('organization_members')
-        .select('organization_id, role, status, organization:organizations(id, name, slug, active)')
+        .select('organization_id, role, status')
         .eq('user_id', nextSession.user.id)
         .eq('status', 'active')
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle()
 
+      if (memberError) throw memberError
+      if (!member) {
+        if (mountedRef.current && requestId === requestRef.current) {
+          setMembership(null)
+          setError(null)
+        }
+        return
+      }
+
+      const { data: organization, error: organizationError } = await supabase
+        .from('organizations')
+        .select('id, name, slug, active')
+        .eq('id', member.organization_id)
+        .maybeSingle()
+
+      if (organizationError) throw organizationError
       if (!mountedRef.current || requestId !== requestRef.current) return
 
-      if (membershipError) {
-        setMembership(null)
-        setError(membershipError.message)
-      } else {
-        setMembership(data as OrganizationMembership | null)
-        setError(null)
-      }
+      setMembership({
+        ...member,
+        organization: organization ?? null,
+      })
+      setError(null)
     } catch (workspaceError) {
       if (!mountedRef.current || requestId !== requestRef.current) return
       setMembership(null)
@@ -103,7 +116,9 @@ export function ReachWellProvider({ children }: { children: ReactNode }) {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mountedRef.current) return
       setSession(nextSession)
-      void loadWorkspace(nextSession)
+      window.setTimeout(() => {
+        if (mountedRef.current) void loadWorkspace(nextSession)
+      }, 0)
     })
 
     return () => {
