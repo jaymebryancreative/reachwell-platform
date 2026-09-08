@@ -9,11 +9,12 @@ import './signin.css'
 
 type SignInParticipant = EventParticipantRecord & { absence_reason: string | null; team: { id: string; name: string } | null }
 const TEAM_ROLES = ['Volunteer', 'Team Leader', 'Coordinator', 'Director'] as const
-const EVENT_ROLE_BY_TEAM_ROLE: Record<(typeof TEAM_ROLES)[number], 'participant' | 'team_lead'> = {
+type EventRole = 'participant' | 'team_lead' | 'event_coordinator' | 'event_lead'
+const EVENT_ROLE_BY_TEAM_ROLE: Record<(typeof TEAM_ROLES)[number], EventRole> = {
   Volunteer: 'participant',
   'Team Leader': 'team_lead',
-  Coordinator: 'participant',
-  Director: 'participant',
+  Coordinator: 'event_coordinator',
+  Director: 'event_lead',
 }
 const CUSTOM_PREFIX = 'Custom Answer — '
 
