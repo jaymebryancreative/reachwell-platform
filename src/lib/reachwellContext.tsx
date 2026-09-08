@@ -61,27 +61,29 @@ export function ReachWellProvider({ children }: { children: ReactNode }) {
 
     try {
       const { data, error: workspaceError } = await supabase
-        .rpc<WorkspaceLookup>('current_organization_membership')
+        .rpc('current_organization_membership')
         .maybeSingle()
+
+      const workspace = data as WorkspaceLookup | null
 
       if (workspaceError) throw workspaceError
       if (!mountedRef.current || requestId !== requestRef.current) return
 
-      if (!data) {
+      if (!workspace) {
         setMembership(null)
         setError(null)
         return
       }
 
       setMembership({
-        organization_id: data.organization_id,
-        role: data.role,
-        status: data.status,
+        organization_id: workspace.organization_id,
+        role: workspace.role,
+        status: workspace.status,
         organization: {
-          id: data.organization_id,
-          name: data.organization_name,
-          slug: data.organization_slug,
-          active: data.organization_active,
+          id: workspace.organization_id,
+          name: workspace.organization_name,
+          slug: workspace.organization_slug,
+          active: workspace.organization_active,
         },
       })
       setError(null)
