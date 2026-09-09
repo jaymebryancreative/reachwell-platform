@@ -28,7 +28,6 @@ import { DataContinuityWorkspace } from '../features/settings/DataContinuityWork
 import { ImpactReportingWorkspace } from '../features/impact/ImpactReportingWorkspace'
 import { MobileNav } from './MobileNav'
 import { useReachWellContext } from '../lib/reachwellContext'
-import { supabase } from '../lib/supabaseClient'
 import './app.css'
 import '../features/events/events.css'
 import '../features/signin/signin.css'
@@ -109,7 +108,7 @@ export function AppShell() {
       <header className="rw-topbar">
         <button className="rw-icon-button rw-mobile-menu" onClick={() => setMobileOpen(v => !v)} aria-label="Toggle navigation">{mobileOpen ? <X size={21}/> : <Menu size={21}/>}</button>
         <div className="rw-context"><span className="rw-eyebrow">{organizationName || (contextLoading ? 'Connecting workspace' : 'Organization workspace')}</span><strong>{primaryNavigation.find(n => n.id === view)?.label ?? (view === 'relationship-timeline' ? 'Connected History' : view === 'signin' ? 'Event Sign-In' : moreItems.find(item => item.id === view)?.label ?? view)}</strong></div>
-        <div className="rw-topbar-actions"><button className="rw-icon-button" aria-label="Open search" onClick={() => selectView('search')}><Search size={19}/></button><button className="rw-icon-button" aria-label="Open notifications" onClick={() => selectView('notifications')}><Bell size={19}/></button><button className="rw-icon-button" aria-label="Open settings" onClick={() => selectView('settings')}><Settings size={19}/></button><button className="rw-user-menu" onClick={() => { void supabase.auth.signOut() }} title="Sign out"><span className="rw-avatar">{initials || 'RW'}</span><span className="rw-user-copy"><strong>{displayName}</strong><small>{organizationRole || (contextError ? 'Organization access required' : 'ReachWell member')}</small></span><ChevronDown size={16}/></button></div>
+        <div className="rw-topbar-actions"><button className="rw-icon-button" aria-label="Open search" onClick={() => selectView('search')}><Search size={19}/></button><button className="rw-user-menu" onClick={() => selectView('settings')} title="Open account and preferences"><span className="rw-avatar">{initials || 'RW'}</span><span className="rw-user-copy"><strong>{displayName}</strong><small>{organizationRole || (contextError ? 'Organization access required' : 'ReachWell member')}</small></span><ChevronDown size={16}/></button></div>
       </header>
       {contextError && <div className="rw-context-alert" role="status">{contextError}</div>}
       <section className="rw-content">
