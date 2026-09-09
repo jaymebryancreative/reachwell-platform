@@ -3,6 +3,7 @@ import { ArrowLeft, CalendarClock, CircleAlert, ClipboardCheck, FileText, HeartH
 import { listRelationshipTimeline, timelineLabel, type RelationshipTimelineRecord } from '../../lib/relationshipTimeline'
 import { getHousehold, listHouseholdPeople, type HouseholdRecord, type PersonRecord } from '../../lib/reachwellApi'
 import { useReachWellContext } from '../../lib/reachwellContext'
+import { supabase } from '../../lib/supabaseClient'
 
 function iconFor(kind: RelationshipTimelineRecord['activity_kind']) {
   if (kind === 'assignment') return <ClipboardCheck size={17} />
@@ -31,7 +32,12 @@ export function RelationshipTimelineWorkspace({ personId, householdId, onBack }:
       const timeline = await listRelationshipTimeline(organizationId, target)
       setRecords(timeline)
       if (personId) {
-        const { data, error: personError } = await import('../../lib/supabaseClient').then(({ supabase }) => supabase.from('people').select('*').eq('organization_id', organizationId).eq('id', personId).single())
+        const { data, error: personError } = await supabase
+          .from('people')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .eq('id', personId)
+          .single()
         if (personError) throw personError
         const nextPerson = data as PersonRecord
         setPerson(nextPerson)
