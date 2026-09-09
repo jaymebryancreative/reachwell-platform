@@ -28,6 +28,7 @@ import { DataContinuityWorkspace } from '../features/settings/DataContinuityWork
 import { ImpactReportingWorkspace } from '../features/impact/ImpactReportingWorkspace'
 import { MobileNav } from './MobileNav'
 import { useReachWellContext } from '../lib/reachwellContext'
+import { supabase } from '../lib/supabaseClient'
 import './app.css'
 import '../features/events/events.css'
 import '../features/signin/signin.css'
@@ -127,7 +128,7 @@ export function AppShell() {
         {view === 'progress' && <TeamProgressWorkspace/>}
         {view === 'activity' && <ActivityWorkspace/>}
         {view === 'communication' && <CommunicationWorkspace/>}
-        {view === 'search' && <GlobalSearchWorkspace/>}
+        {view === 'search' && <GlobalSearchWorkspace onNavigate={selectView}/>} 
         {view === 'resources' && <OperationsHub section="resources"/>}
         {view === 'giving' && <GivingWorkspace/>}
         {view === 'finance' && <FinanceReportingWorkspace/>}
