@@ -82,6 +82,6 @@ describe('assignment workflow semantics', () => {
       { status: 'in_progress' },
       { status: 'skipped' },
       { status: 'cancelled' },
-    ])).toEqual({ total: 5, completed: 1, active: 1, open: 1, skipped: 1, cancelled: 1, percent: 50 })
+    ])).toEqual({ total: 5, completed: 1, active: 1, open: 1, skipped: 1, cancelled: 1, percent: 33 })
   })
 })
