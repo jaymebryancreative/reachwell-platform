@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, CircleAlert, MapPin, MessageSquare, Moon, Play, SquareCheckBig, X, CalendarPlus, ShieldAlert } from 'lucide-react'
 import { completeAssignmentObjective, createFollowUp, createNeed, createPrayerRequest, finishAssignmentVisit, listAssignmentObjectives, listAssignments, listTeamProgress, saveAssignmentNote, startAssignmentVisit, updateAssignmentStatus, type AssignmentObjective, type AssignmentRecord, type AssignmentVisit, type TeamProgressRecord } from '../../lib/reachwellApi'
+import { completeAssignmentAndGetNext } from '../../lib/assignmentWorkflowApi'
 import { useReachWellContext } from '../../lib/reachwellContext'
 import { supabase } from '../../lib/supabaseClient'
-import { createMissionModeState, enterMissionMode, exitMissionMode, selectMissionAssignment, getAssignmentProgress } from '../../lib/fieldWorkflow'
+import { createMissionModeState, enterMissionMode, exitMissionMode, selectMissionAssignment, getAssignmentProgress, isActiveAssignment } from '../../lib/fieldWorkflow'
 
 type Action = 'note' | 'need' | 'prayer' | 'followup' | 'backup' | null
 
@@ -20,12 +21,12 @@ export function MissionMode() {
   const [backupOpen, setBackupOpen] = useState(false); const [backupType, setBackupType] = useState<'backup' | 'unsafe' | 'medical' | 'conflict' | 'other'>('backup')
   const [loading, setLoading] = useState(false); const [message, setMessage] = useState<string | null>(null); const [error, setError] = useState<string | null>(null)
   const enabled = missionState.enabled
-  const current = assignments.find(a => a.id === missionState.selectedAssignmentId && a.status !== 'completed') ?? assignments.find(a => a.status !== 'completed')
-  const activeAssignments = useMemo(() => assignments.filter(a => a.status !== 'completed'), [assignments])
+  const current = assignments.find(a => a.id === missionState.selectedAssignmentId && isActiveAssignment(a.status)) ?? assignments.find(a => isActiveAssignment(a.status))
+  const activeAssignments = useMemo(() => assignments.filter(a => isActiveAssignment(a.status)), [assignments])
   const progress = useMemo(() => getAssignmentProgress(assignments), [assignments])
   const currentEventTeamProgress = useMemo(() => {
     if (!current?.event_id) return []
-    const eventAssignments = teamProgress.filter(a => a.event_id === current.event_id && a.assigned_team_id)
+    const eventAssignments = teamProgress.filter(a => a.event_id === current.event_id && a.assigned_team_id && isActiveAssignment(a.status) || (a.event_id === current.event_id && a.assigned_team_id && a.status === 'completed'))
     const grouped = new Map<string, { id: string; name: string; total: number; completed: number; active: number }>()
     eventAssignments.forEach(assignment => {
       const id = assignment.assigned_team_id as string
@@ -48,8 +49,8 @@ export function MissionMode() {
       setTeamProgress(allProgress)
       setMissionState(state => {
         if (!state.enabled) return state
-        if (state.selectedAssignmentId && next.some(item => item.id === state.selectedAssignmentId && item.status !== 'completed')) return state
-        const firstOpen = next.find(item => item.status !== 'completed')
+        if (state.selectedAssignmentId && next.some(item => item.id === state.selectedAssignmentId && isActiveAssignment(item.status))) return state
+        const firstOpen = next.find(item => isActiveAssignment(item.status))
         return firstOpen ? selectMissionAssignment(state, firstOpen.id) : exitMissionMode()
       })
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load your mission assignments.') } finally { setLoading(false) }
@@ -60,7 +61,16 @@ export function MissionMode() {
 
   const setEnabled = (next: boolean) => { setMissionState(next ? enterMissionMode() : exitMissionMode()); setActiveAction(null); setVisit(null); setObjectives([]); setOutcome(''); setSummary(''); setMessage(null); setError(null) }
   const setAction = (action: Action) => { setActiveAction(active => active === action ? null : action); setMessage(null); setError(null) }
-  const complete = async () => { if (!current || !organizationId || !user) return; try { await updateAssignmentStatus(current.id, 'completed', user.id, summary || undefined); setAssignments(items => items.map(item => item.id === current.id ? { ...item, status: 'completed', completed_at: new Date().toISOString(), completed_by: user.id, completion_summary: summary || null } : item)); setMissionState(state => state.enabled ? { ...state, selectedAssignmentId: null } : createMissionModeState()); setActiveAction(null); setVisit(null); setMessage('Assignment completed and recorded in history.'); void load() } catch (err) { setError(err instanceof Error ? err.message : 'Unable to complete assignment.') } }
+  const complete = async () => {
+    if (!current || !user) return
+    try {
+      const next = await completeAssignmentAndGetNext(current.id, summary || null)
+      setAssignments(items => items.map(item => item.id === current.id ? { ...item, status: 'completed', completed_at: new Date().toISOString(), completed_by: user.id, completion_summary: summary || null } : item))
+      setMissionState(state => state.enabled ? { ...state, selectedAssignmentId: next?.id ?? null } : createMissionModeState())
+      setActiveAction(null); setVisit(null); setMessage(next ? 'Assignment completed. Your next assignment is ready.' : 'Assignment completed and recorded in history.')
+      void load()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to complete assignment.') }
+  }
   const saveNote = async () => { if (!current || !organizationId || !user || !note.trim()) return; try { await saveAssignmentNote(current.id, organizationId, user.id, note.trim()); setNote(''); setMessage('Note saved to this assignment.') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to save note.') } }
   const saveNeed = async () => { if (!current || !organizationId || !user || !need.trim()) return; try { await createNeed(current.id, organizationId, user.id, need.trim(), need.trim()); setNeed(''); setMessage('Need recorded for follow-up.') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to record need.') } }
   const savePrayer = async () => { if (!current || !organizationId || !user || !prayer.trim()) return; try { await createPrayerRequest(current.id, organizationId, user.id, prayer.trim()); setPrayer(''); setMessage('Prayer request recorded.') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to record prayer request.') } }
