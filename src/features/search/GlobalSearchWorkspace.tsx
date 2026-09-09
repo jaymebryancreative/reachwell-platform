@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useState } from 'react'
-import { BarChart3, CalendarDays, FileText, MessageCircle, Search, Users, UserRound } from 'lucide-react'
+import { CalendarDays, FileText, MessageCircle, Search, Users, UserRound } from 'lucide-react'
 import { useReachWellContext } from '../../lib/reachwellContext'
 import { supabase } from '../../lib/supabaseClient'
 
@@ -48,7 +48,7 @@ export function GlobalSearchWorkspace({ onNavigate }: { onNavigate?: (view: View
     finally { setLoading(false) }
   }
 
-  const iconFor = (type: string): ReactNode => type === 'Person' ? <UserRound size={17}/> : type === 'Team' ? <Users size={17}/> : type === 'Event' ? <CalendarDays size={17}/> : type === 'Message' || type === 'Channel' ? <MessageCircle size={17}/> : type === 'File' ? <BarChart3 size={17}/> : <FileText size={17}/>
+  const iconFor = (type: string): ReactNode => type === 'Person' ? <UserRound size={17}/> : type === 'Team' ? <Users size={17}/> : type === 'Event' ? <CalendarDays size={17}/> : type === 'Message' || type === 'Channel' ? <MessageCircle size={17}/> : <FileText size={17}/>
 
   return <div className="global-search-workspace">
     <header className="global-search-heading"><div><span className="rw-eyebrow">REACHWELL SEARCH</span><h1>Search everything that matters.</h1><p>Find people, households, teams, events, assignments, conversations and files in one place.</p></div></header>
