@@ -6,3 +6,16 @@
 .rw-app-shell input:not(.mission-shell input),.rw-app-shell textarea:not(.mission-shell textarea),.rw-app-shell select:not(.mission-shell select){color:var(--rw-text);background:#fff;border:1.5px solid var(--rw-line);caret-color:var(--rw-violet);}
 .rw-app-shell input:not(.mission-shell input)::placeholder,.rw-app-shell textarea:not(.mission-shell textarea)::placeholder{color:#74798a;opacity:1}
 .rw-app-shell input:not(.mission-shell input):focus,.rw-app-shell textarea:not(.mission-shell textarea):focus,.rw-app-shell select:not(.mission-shell select):focus{outline:3px solid rgba(99,79,240,.18);outline-offset:1px;border-color:var(--rw-violet);background:#fff}
+
+
+/* Product polish: neutralize legacy dark controls and make every editable surface unmistakably usable. */
+.rw-app-shell button:not(.mission-shell button){color:var(--rw-ink)}
+.rw-app-shell .rw-primary-button{color:#fff}
+.rw-app-shell .rw-secondary-button,.rw-app-shell .rw-icon-button{background:#fff;color:var(--rw-ink);border-color:var(--rw-border)}
+.rw-app-shell .rw-secondary-button:hover,.rw-app-shell .rw-icon-button:hover{background:var(--rw-surface-soft)}
+.rw-app-shell input:not(.mission-shell input),.rw-app-shell textarea:not(.mission-shell textarea),.rw-app-shell select:not(.mission-shell select){min-height:44px;border-radius:12px;color:#202432;background:#fff;box-shadow:0 1px 2px rgba(24,26,43,.02)}
+.rw-app-shell textarea:not(.mission-shell textarea){min-height:96px;padding-top:12px}
+.rw-modal{max-height:calc(100dvh - 32px);overflow:auto}
+.rw-modal-backdrop{align-items:center}
+.rw-modal-wide{width:min(100%,760px)}
+.rw-modal .rw-modal-close{position:absolute;right:16px;top:16px}
