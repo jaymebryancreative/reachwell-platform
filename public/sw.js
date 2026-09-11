@@ -1,3 +1,5 @@
+/* global self, caches, URL, fetch */
+
 const CACHE = 'reachwell-shell-v1'
 const SHELL = ['/', '/manifest.webmanifest', '/reachwell-icon.svg']
 
