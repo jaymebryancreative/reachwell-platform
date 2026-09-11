@@ -1,0 +1,19 @@
+{
+  "name": "ReachWell — Outreach Made Simple",
+  "short_name": "ReachWell",
+  "description": "A connected operating platform for outreach, teams, events, mission work, and follow-up.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8f7fb",
+  "theme_color": "#6d5dfc",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/reachwell-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
