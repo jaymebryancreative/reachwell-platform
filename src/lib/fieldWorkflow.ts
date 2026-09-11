@@ -1,4 +1,4 @@
-export type AssignmentWorkflowStatus = 'open' | 'in_progress' | 'completed'
+export type AssignmentWorkflowStatus = 'pending' | 'in_progress' | 'completed' | 'skipped' | 'cancelled'
 
 export type FieldAssignmentLike = {
   status: string
@@ -9,6 +9,9 @@ export type MissionModeState = {
   enabled: boolean
   selectedAssignmentId: string | null
 }
+
+export const ACTIVE_ASSIGNMENT_STATUSES: readonly AssignmentWorkflowStatus[] = ['pending', 'in_progress']
+export const TERMINAL_ASSIGNMENT_STATUSES: readonly AssignmentWorkflowStatus[] = ['completed', 'skipped', 'cancelled']
 
 export function createMissionModeState(): MissionModeState {
   return { enabled: false, selectedAssignmentId: null }
@@ -27,15 +30,23 @@ export function selectMissionAssignment(state: MissionModeState, assignmentId: s
   return { ...state, selectedAssignmentId: assignmentId }
 }
 
+export function isActiveAssignment(status: string): boolean {
+  return ACTIVE_ASSIGNMENT_STATUSES.includes(status as AssignmentWorkflowStatus)
+}
+
+export function isTerminalAssignment(status: string): status is AssignmentWorkflowStatus {
+  return TERMINAL_ASSIGNMENT_STATUSES.includes(status as AssignmentWorkflowStatus)
+}
+
 export function getAssignmentProgress(assignments: FieldAssignmentLike[]) {
   const total = assignments.length
   const completed = assignments.filter((assignment) => assignment.status === 'completed' || Boolean(assignment.completed_at)).length
   const active = assignments.filter((assignment) => assignment.status === 'in_progress').length
-  const open = Math.max(0, total - completed - active)
-  const percent = total === 0 ? 0 : Math.round((completed / total) * 100)
-  return { total, completed, active, open, percent }
-}
+  const pending = assignments.filter((assignment) => assignment.status === 'pending').length
+  const skipped = assignments.filter((assignment) => assignment.status === 'skipped').length
+  const cancelled = assignments.filter((assignment) => assignment.status === 'cancelled').length
+  const actionable = completed + active + pending
+  const percent = actionable === 0 ? 0 : Math.round((completed / actionable) * 100)
 
-export function isTerminalAssignment(status: string): status is 'completed' {
-  return status === 'completed'
+  return { total, completed, active, open: pending, skipped, cancelled, percent }
 }
