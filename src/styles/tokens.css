@@ -32,9 +32,15 @@ input, textarea, select {
   background: #fff;
   border: 1.5px solid var(--rw-line);
   border-radius: 12px;
+  caret-color: var(--rw-violet);
 }
 input::placeholder, textarea::placeholder { color: #74798a; opacity: 1; }
-input:focus, textarea:focus, select:focus, button:focus-visible {
+input:focus, textarea:focus, select:focus {
+  outline: 3px solid rgba(99, 79, 240, .18);
+  outline-offset: 1px;
+  border-color: var(--rw-violet);
+}
+button:focus-visible {
   outline: 3px solid rgba(99, 79, 240, .18);
   outline-offset: 1px;
 }
