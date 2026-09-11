@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MessageCircle, Plus, RefreshCw, Search, Send, Archive, CheckCheck, Pencil, Trash2, Users, Heart, HandHeart, Megaphone, CalendarDays, Shield, Sparkles, House, Star, Settings2 } from 'lucide-react'
 import { useReachWellContext } from '../../lib/reachwellContext'
 import { supabase } from '../../lib/supabaseClient'
