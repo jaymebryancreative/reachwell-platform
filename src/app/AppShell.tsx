@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, Bell, CalendarDays, ChevronDown, Database, DollarSign, FolderKanban, HeartPulse, History, Menu, MessageCircle, Search, Settings, ShieldCheck, Users, X } from 'lucide-react'
+import { BarChart3, Bell, CalendarDays, ChevronDown, Database, DollarSign, FolderKanban, HeartPulse, History, Home, Menu, MessageCircle, Search, Settings, ShieldCheck, UserRound, Users, UsersRound, X } from 'lucide-react'
 import { MissionMode } from '../features/mission/MissionMode'
 import { ProjectsWorkspace } from '../features/projects/ProjectsWorkspace'
 import { TeamsWorkspace } from '../features/teams/TeamsWorkspace'
@@ -52,9 +52,9 @@ type Metric = { label: string; value: number; description: string; icon: typeof 
 type MoreItem = { id: View; label: string; description: string; icon: typeof Users }
 
 const primaryNavigation: { id: View; label: string; icon: typeof Users }[] = [
-  { id: 'home', label: 'Home', icon: Users },
-  { id: 'people', label: 'People', icon: Users },
-  { id: 'teams', label: 'Teams', icon: Users },
+  { id: 'home', label: 'Home', icon: Home },
+  { id: 'people', label: 'People', icon: UserRound },
+  { id: 'teams', label: 'Teams', icon: UsersRound },
   { id: 'events', label: 'Events', icon: CalendarDays },
   { id: 'mission', label: 'Mission', icon: ShieldCheck },
   { id: 'communication', label: 'Communication', icon: MessageCircle },
@@ -163,8 +163,8 @@ function Overview({ onNavigate, organizationId }: { onNavigate: (view: View) => 
         supabase.from('follow_ups').select('id', { count: 'exact', head: true }).neq('status', 'completed').eq('organization_id', organizationId),
       ])
       setMetrics([
-        { label: 'People', value: results[0].count ?? 0, description: 'People connected to your work', icon: Users, view: 'people' },
-        { label: 'Teams', value: results[1].count ?? 0, description: 'Active teams ready to serve', icon: Users, view: 'teams' },
+        { label: 'People', value: results[0].count ?? 0, description: 'People connected to your work', icon: UserRound, view: 'people' },
+        { label: 'Teams', value: results[1].count ?? 0, description: 'Active teams ready to serve', icon: UsersRound, view: 'teams' },
         { label: 'Upcoming events', value: results[2].count ?? 0, description: 'Events on the calendar', icon: CalendarDays, view: 'events' },
         { label: 'Open work', value: results[3].count ?? 0, description: 'Assignments still in motion', icon: ShieldCheck, view: 'assignments' },
         { label: 'Follow-ups', value: results[4].count ?? 0, description: 'Next steps needing attention', icon: HeartPulse, view: 'followups' },
