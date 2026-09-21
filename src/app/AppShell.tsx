@@ -26,7 +26,6 @@ import { CommunicationWorkspace } from '../features/communication/CommunicationW
 import { SettingsWorkspace } from '../features/settings/SettingsWorkspace'
 import { DataContinuityWorkspace } from '../features/settings/DataContinuityWorkspace'
 import { ImpactReportingWorkspace } from '../features/impact/ImpactReportingWorkspace'
-import { MobileNav } from './MobileNav'
 import { useReachWellContext } from '../lib/reachwellContext'
 import { supabase } from '../lib/supabaseClient'
 import './app.css'
